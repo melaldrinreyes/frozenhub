@@ -7,6 +7,7 @@ import fs from "fs";
 import path from "path";
 import { initializeDatabase, seedDatabase } from "./db";
 import { loadUser, requireAuth, requireRole } from "./middleware/auth";
+import { jwtMiddleware } from "./middleware/jwt";
 import {
   helmetConfig,
   loginRateLimiter,
@@ -342,6 +343,9 @@ export function createServer() {
   app.use(checkSessionTimeout);
   app.use(sessionFingerprinting);
   app.use(limitConcurrentSessions);
+
+  // JWT middleware for stateless auth (serverless compatible)
+  app.use(jwtMiddleware);
 
   // Serve uploaded files statically
   // Use /tmp in serverless, public/uploads locally

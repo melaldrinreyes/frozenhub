@@ -2,6 +2,7 @@ import { RequestHandler } from "express";
 import bcrypt from "bcryptjs";
 import { getConnection } from "../db";
 import { AuthUser } from "../middleware/auth";
+import { generateToken } from "../middleware/jwt";
 import fs from "fs";
 import path from "path";
 
@@ -164,7 +165,8 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
     req.session.userRole = user.role;
     req.session.user = authUser;
 
-    res.json({ user: authUser });
+    const token = generateToken(authUser);
+    res.json({ user: authUser, token });
   } catch (error) {
     logMySqlError("MySQL login error:", error);
     if (process.env.NODE_ENV !== "production" || isDemoLoginEnabled()) {
@@ -174,8 +176,9 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
         req.session.userRole = authUser.role;
         req.session.user = authUser;
 
+        const token = generateToken(authUser);
         console.warn("⚠ MySQL is unreachable; using fallback login");
-        res.json({ user: authUser });
+        res.json({ user: authUser, token });
         return;
       }
     }
@@ -194,8 +197,9 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
       req.session.userRole = authUser.role;
       req.session.user = authUser;
 
+      const token = generateToken(authUser);
       console.warn("⚠ MySQL is unreachable; using fallback admin login");
-      res.json({ user: authUser });
+      res.json({ user: authUser, token });
       return;
     }
 

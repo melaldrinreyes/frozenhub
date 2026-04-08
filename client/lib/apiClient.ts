@@ -2,6 +2,7 @@
 
 const API_BASE = "/api";
 const REQUEST_TIMEOUT_MS = 15000;
+const JWT_TOKEN_KEY = "frozenhub_jwt_token";
 
 // In development, suppress expected 401 errors from auth checks
 const SUPPRESS_AUTH_ERRORS = import.meta.env.DEV;
@@ -77,11 +78,15 @@ class ApiClient {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
+    // Get JWT token from localStorage if available
+    const token = typeof window !== "undefined" ? localStorage.getItem(JWT_TOKEN_KEY) : null;
+
     const config: RequestInit = {
       ...options,
       headers: {
         "Content-Type": "application/json",
         ...options.headers,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       credentials: "include", // Ensure cookies/sessions are included
       signal: controller.signal,
@@ -133,20 +138,39 @@ class ApiClient {
 
   // Auth endpoints
   async login(email: string, password: string) {
-    return this.request<{ user: any }>("/auth/login", {
+    const response = await this.request<{ user: any; token?: string }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
+    
+    // Save JWT token for subsequent requests
+    if (response.token && typeof window !== "undefined") {
+      localStorage.setItem(JWT_TOKEN_KEY, response.token);
+    }
+    
+    return response;
   }
 
   async signup(name: string, email: string, phone: string, password: string) {
-    return this.request<{ user: any }>("/auth/signup", {
+    const response = await this.request<{ user: any; token?: string }>("/auth/signup", {
       method: "POST",
       body: JSON.stringify({ name, email, phone, password }),
     });
+    
+    // Save JWT token for subsequent requests
+    if (response.token && typeof window !== "undefined") {
+      localStorage.setItem(JWT_TOKEN_KEY, response.token);
+    }
+    
+    return response;
   }
 
   async logout() {
+    // Clear JWT token from localStorage
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(JWT_TOKEN_KEY);
+    }
+    
     return this.request<{ message: string }>("/auth/logout", {
       method: "POST",
     });
