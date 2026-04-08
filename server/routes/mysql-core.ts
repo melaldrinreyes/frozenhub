@@ -21,6 +21,10 @@ function logMySqlError(message: string, error: unknown) {
 const DEV_ADMIN_EMAIL = process.env.DEV_ADMIN_EMAIL || "admin@gmail.com";
 const DEV_ADMIN_PASSWORD = process.env.DEV_ADMIN_PASSWORD || "admin123";
 
+function isDemoLoginEnabled(): boolean {
+  return String(process.env.ALLOW_DEMO_LOGIN || "").toLowerCase() === "true";
+}
+
 type DevFallbackUser = AuthUser & {
   password: string;
   identifiers: string[];
@@ -163,20 +167,20 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
     res.json({ user: authUser });
   } catch (error) {
     logMySqlError("MySQL login error:", error);
-    if (process.env.NODE_ENV !== "production") {
+    if (process.env.NODE_ENV !== "production" || isDemoLoginEnabled()) {
       const authUser = findDevFallbackUser(loginIdentifier, String(password));
       if (authUser) {
         req.session.userId = authUser.id;
         req.session.userRole = authUser.role;
         req.session.user = authUser;
 
-        console.warn("⚠ MySQL is unreachable; using development fallback login");
+        console.warn("⚠ MySQL is unreachable; using fallback login");
         res.json({ user: authUser });
         return;
       }
     }
 
-    if (process.env.NODE_ENV !== "production" && loginIdentifier === DEV_ADMIN_EMAIL && password === DEV_ADMIN_PASSWORD) {
+    if ((process.env.NODE_ENV !== "production" || isDemoLoginEnabled()) && loginIdentifier === DEV_ADMIN_EMAIL && password === DEV_ADMIN_PASSWORD) {
       const authUser = {
         id: "user-admin-001",
         name: "System Administrator",
@@ -190,7 +194,7 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
       req.session.userRole = authUser.role;
       req.session.user = authUser;
 
-      console.warn("⚠ MySQL is unreachable; using development admin fallback login");
+      console.warn("⚠ MySQL is unreachable; using fallback admin login");
       res.json({ user: authUser });
       return;
     }
