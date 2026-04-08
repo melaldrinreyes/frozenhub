@@ -18,17 +18,23 @@ declare global {
   }
 }
 
-// Middleware to check if user is authenticated
+// Middleware to check if user is authenticated (session or JWT)
 export const requireAuth: RequestHandler = (req, res, next) => {
-  if (!req.session?.userId) {
-    console.warn(`Unauthorized access attempt to ${req.path} from ${req.ip}`);
-    res.status(401).json({ 
-      error: "Authentication required",
-      message: "You must be logged in to access this resource"
-    });
-    return;
+  // Check session (traditional method)
+  if (req.session?.userId) {
+    return next();
   }
-  next();
+  
+  // Check JWT token (serverless compatible)
+  if (req.user && req.user.id) {
+    return next();
+  }
+  
+  console.warn(`Unauthorized access attempt to ${req.path} from ${req.ip}`);
+  res.status(401).json({ 
+    error: "Authentication required",
+    message: "You must be logged in to access this resource"
+  });
 };
 
 // Middleware to check if user has specific role
