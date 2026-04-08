@@ -18,8 +18,8 @@ function logMySqlError(message: string, error: unknown) {
   if (isDatabaseUnavailableError(error)) return;
   console.error(message, error);
 }
-const DEV_ADMIN_EMAIL = process.env.DEV_ADMIN_EMAIL || "admin@gmail.com";
-const DEV_ADMIN_PASSWORD = process.env.DEV_ADMIN_PASSWORD || "admin123";
+const DEV_ADMIN_EMAIL = String(process.env.DEV_ADMIN_EMAIL || "admin@gmail.com").trim();
+const DEV_ADMIN_PASSWORD = String(process.env.DEV_ADMIN_PASSWORD || "admin123").trim();
 
 function isDemoLoginEnabled(): boolean {
   return String(process.env.ALLOW_DEMO_LOGIN || "").trim().toLowerCase() === "true";
