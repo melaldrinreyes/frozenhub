@@ -359,11 +359,13 @@ export function createServer() {
   
   // Debug endpoint for environment/config
   app.get("/api/debug/env", (_req, res) => {
+    const allowDemoLogin = String(process.env.ALLOW_DEMO_LOGIN || "").trim().toLowerCase() === "true";
     res.json({
       dataProvider: runtimeDataProvider,
       nodeEnv: process.env.NODE_ENV,
       isNetlify: !!process.env.NETLIFY,
-      isServerless: !!(process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL)
+      isServerless: !!(process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL),
+      allowDemoLogin,
     });
   });
 
