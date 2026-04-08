@@ -1,4 +1,4 @@
-﻿# Logs
+# Logs
 logs
 *.log
 npm-debug.log*
@@ -33,4 +33,3 @@ firebase-*.json
 
 # Local Netlify folder
 .netlify
-.env
