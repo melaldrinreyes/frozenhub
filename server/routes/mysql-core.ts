@@ -22,7 +22,7 @@ const DEV_ADMIN_EMAIL = process.env.DEV_ADMIN_EMAIL || "admin@gmail.com";
 const DEV_ADMIN_PASSWORD = process.env.DEV_ADMIN_PASSWORD || "admin123";
 
 function isDemoLoginEnabled(): boolean {
-  return String(process.env.ALLOW_DEMO_LOGIN || "").toLowerCase() === "true";
+  return String(process.env.ALLOW_DEMO_LOGIN || "").trim().toLowerCase() === "true";
 }
 
 type DevFallbackUser = AuthUser & {
