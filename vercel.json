@@ -1,0 +1,21 @@
+{
+  "buildCommand": "pnpm build",
+  "outputDirectory": "dist/spa",
+  "installCommand": "pnpm install",
+  "framework": null,
+  "functions": {
+    "api/index.ts": {
+      "includeFiles": "server/**"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

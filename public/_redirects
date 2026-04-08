@@ -1,0 +1,3 @@
+# SPA fallback - serve index.html for all routes except API and static files
+/api/*  /.netlify/functions/api/:splat  200
+/*      /index.html                      200

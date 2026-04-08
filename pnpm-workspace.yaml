@@ -1,0 +1,6 @@
+ignoredBuiltDependencies:
+  - '@firebase/util'
+  - '@swc/core'
+  - better-sqlite3
+  - esbuild
+  - protobufjs

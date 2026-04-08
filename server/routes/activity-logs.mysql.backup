@@ -1,0 +1,212 @@
+import { RequestHandler } from "express";
+import { getConnection } from "../db";
+import { RowDataPacket } from "mysql2";
+
+// Helper function to create activity log
+export async function logActivity(
+  connection: any,
+  data: {
+    userId?: string | null;
+    userName?: string | null;
+    userRole?: "admin" | "branch_admin" | "pos_operator" | "customer" | null;
+    action: string;
+    entityType: string;
+    entityId?: string | null;
+    entityName?: string | null;
+    description?: string | null;
+    metadata?: any;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+    branchId?: string | null;
+  }
+) {
+  try {
+    const logId = `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    await connection.query(
+      `INSERT INTO activity_logs (
+        id, user_id, user_name, user_role, action, entity_type,
+        entity_id, entity_name, description, metadata,
+        ip_address, user_agent, branch_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        logId,
+        data.userId || null,
+        data.userName || null,
+        data.userRole || null,
+        data.action,
+        data.entityType,
+        data.entityId || null,
+        data.entityName || null,
+        data.description || null,
+        data.metadata ? JSON.stringify(data.metadata) : null,
+        data.ipAddress || null,
+        data.userAgent || null,
+        data.branchId || null,
+      ]
+    );
+    
+    return logId;
+  } catch (error) {
+    console.error("Activity log error:", error);
+    // Don't throw - logging should not break the main operation
+    return null;
+  }
+}
+
+// Get activity logs with pagination and filters
+export const handleGetActivityLogs: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const {
+      userId,
+      action,
+      entityType,
+      branchId,
+      startDate,
+      endDate,
+      page = "1",
+      limit = "50",
+    } = req.query;
+
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const offset = (pageNum - 1) * limitNum;
+
+    let query = "SELECT * FROM activity_logs WHERE 1=1";
+    const params: any[] = [];
+
+    if (userId) {
+      query += " AND user_id = ?";
+      params.push(userId);
+    }
+
+    if (action) {
+      query += " AND action = ?";
+      params.push(action);
+    }
+
+    if (entityType) {
+      query += " AND entity_type = ?";
+      params.push(entityType);
+    }
+
+    if (branchId) {
+      query += " AND branch_id = ?";
+      params.push(branchId);
+    }
+
+    if (startDate) {
+      query += " AND created_at >= ?";
+      params.push(startDate);
+    }
+
+    if (endDate) {
+      query += " AND created_at <= ?";
+      params.push(endDate);
+    }
+
+    // Get total count
+    const countQuery = query.replace("SELECT *", "SELECT COUNT(*) as total");
+    const [countResult] = await connection.query(countQuery, params);
+    const total = (countResult as any[])[0].total;
+
+    // Get paginated results
+    query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+    params.push(limitNum, offset);
+
+    const [logs] = await connection.query(query, params);
+
+    // Parse metadata JSON
+    const parsedLogs = (logs as any[]).map((log) => ({
+      ...log,
+      metadata: log.metadata ? JSON.parse(log.metadata) : null,
+    }));
+
+    res.json({
+      logs: parsedLogs,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (error) {
+    console.error("Get activity logs error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+// Get activity log statistics
+export const handleGetActivityStats: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const { branchId, startDate, endDate } = req.query;
+
+    let query = "SELECT action, COUNT(*) as count FROM activity_logs WHERE 1=1";
+    const params: any[] = [];
+
+    if (branchId) {
+      query += " AND branch_id = ?";
+      params.push(branchId);
+    }
+
+    if (startDate) {
+      query += " AND created_at >= ?";
+      params.push(startDate);
+    }
+
+    if (endDate) {
+      query += " AND created_at <= ?";
+      params.push(endDate);
+    }
+
+    query += " GROUP BY action ORDER BY count DESC";
+
+    const [stats] = await connection.query(query, params);
+
+    res.json({ stats });
+  } catch (error) {
+    console.error("Get activity stats error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+// Get recent activity logs
+export const handleGetRecentActivity: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const { limit = "20", branchId } = req.query;
+
+    let query = "SELECT * FROM activity_logs WHERE 1=1";
+    const params: any[] = [];
+
+    if (branchId) {
+      query += " AND branch_id = ?";
+      params.push(branchId);
+    }
+
+    query += " ORDER BY created_at DESC LIMIT ?";
+    params.push(parseInt(limit as string));
+
+    const [logs] = await connection.query(query, params);
+
+    // Parse metadata JSON
+    const parsedLogs = (logs as any[]).map((log) => ({
+      ...log,
+      metadata: log.metadata ? JSON.parse(log.metadata) : null,
+    }));
+
+    res.json({ logs: parsedLogs });
+  } catch (error) {
+    console.error("Get recent activity error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};

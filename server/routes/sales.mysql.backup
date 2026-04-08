@@ -1,0 +1,888 @@
+import { RequestHandler } from "express";
+import { getConnection } from "../db";
+import { RowDataPacket, ResultSetHeader } from "mysql2";
+import { logActivity } from "./activity-logs";
+
+// Helper: Calculate discount for a product with promo
+function calculatePromoDiscount(
+  price: number,
+  quantity: number,
+  discountType: "percentage" | "fixed",
+  discountValue: number,
+  maxDiscount?: number | null
+): number {
+  const subtotal = price * quantity;
+  
+  if (discountType === "percentage") {
+    const discount = (subtotal * discountValue) / 100;
+    return maxDiscount && discount > maxDiscount ? maxDiscount : discount;
+  }
+  
+  // Fixed discount applies per item
+  const discount = discountValue * quantity;
+  return maxDiscount && discount > maxDiscount ? maxDiscount : discount;
+}
+
+// Helper: Check if promo is valid for a product
+async function getValidPromoForProduct(
+  connection: any,
+  productId: string,
+  totalAmount: number
+): Promise<any | null> {
+  const now = new Date();
+  
+  const [promos] = await connection.query(
+    `SELECT p.*
+     FROM promos p
+     INNER JOIN product_promos pp ON p.id = pp.promo_id
+     WHERE pp.product_id = ?
+     AND p.active = TRUE
+     AND p.start_date <= ?
+     AND p.end_date >= ?
+     AND (p.min_purchase = 0 OR p.min_purchase <= ?)
+     ORDER BY p.discount_value DESC
+     LIMIT 1`,
+    [productId, now, now, totalAmount]
+  );
+
+  return (promos as any[]).length > 0 ? (promos as any[])[0] : null;
+}
+
+// Get all sales
+export const handleGetSales: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const { branchId, startDate, endDate } = req.query;
+    
+    let query = "SELECT * FROM sales WHERE 1=1";
+    const params: any[] = [];
+    
+    if (branchId) {
+      query += " AND branch_id = ?";
+      params.push(branchId);
+    }
+    
+    if (startDate) {
+      query += " AND DATE(date) >= DATE(?)";
+      params.push(startDate);
+    }
+    
+    if (endDate) {
+      query += " AND DATE(date) <= DATE(?)";
+      params.push(endDate);
+    }
+    
+    query += " ORDER BY date DESC";
+    
+    console.log("📊 Get sales query:", { query, params, branchId, startDate, endDate });
+    const [sales] = await connection.query(query, params);
+    console.log(`📊 Found ${(sales as any[]).length} sales`);
+    
+    // Get sale items for each sale
+    const salesWithItems = await Promise.all((sales as any[]).map(async (sale: any) => {
+      const [items] = await connection.query(`
+        SELECT 
+          si.*,
+          p.name as product_name
+        FROM sale_items si
+        JOIN products p ON si.product_id = p.id
+        WHERE si.sale_id = ?
+      `, [sale.id]);
+      
+      return { ...sale, items };
+    }));
+    
+    res.json({ sales: salesWithItems });
+  } catch (error) {
+    console.error("Get sales error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+// Get sales statistics
+export const handleGetSalesStats: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const { branchId, startDate, endDate } = req.query;
+    
+    let query = "SELECT SUM(total_amount) as total_sales, COUNT(*) as total_orders, AVG(total_amount) as avg_order FROM sales WHERE 1=1";
+    const params: any[] = [];
+    
+    if (branchId) {
+      query += " AND branch_id = ?";
+      params.push(branchId);
+    }
+    
+    if (startDate) {
+      query += " AND date >= ?";
+      params.push(startDate);
+    }
+    
+    if (endDate) {
+      query += " AND date <= ?";
+      params.push(endDate);
+    }
+    
+    const [stats] = await connection.query(query, params);
+    const statsData = (stats as any[])[0];
+    
+    res.json({
+      totalSales: statsData.total_sales || 0,
+      totalOrders: statsData.total_orders || 0,
+      avgOrder: statsData.avg_order || 0,
+    });
+  } catch (error) {
+    console.error("Get sales stats error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+// Get sales trend data for charts (last 7 days for recent activity)
+export const handleGetSalesTrend: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const { branchId } = req.query;
+    
+    // Get sales data for the last 7 days grouped by day
+    let query = `
+      SELECT 
+        DATE_FORMAT(date, '%b %d') as month,
+        DATE_FORMAT(date, '%Y-%m-%d') as day_key,
+        SUM(total_amount) as sales,
+        COUNT(*) as orders,
+        SUM(items_count) as items_sold
+      FROM sales
+      WHERE date >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+    `;
+    
+    const params: any[] = [];
+    
+    if (branchId) {
+      query += " AND branch_id = ?";
+      params.push(branchId);
+    }
+    
+    query += `
+      GROUP BY DATE_FORMAT(date, '%Y-%m-%d'), DATE_FORMAT(date, '%b %d')
+      ORDER BY day_key ASC
+    `;
+    
+    console.log("📈 Sales trend query:", { branchId, query });
+    const [results] = await connection.query(query, params);
+    console.log("📈 Sales trend raw results:", results);
+    
+    // Fill in missing days with zero data for the last 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); // 7 days total including today
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const trend: any[] = [];
+    
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(sevenDaysAgo);
+      date.setDate(date.getDate() + i);
+      const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const dayLabel = `${monthNames[date.getMonth()]} ${date.getDate()}`;
+      
+      const data = (results as any[]).find((r: any) => r.day_key === dayKey);
+      
+      trend.push({
+        month: dayLabel,
+        sales: data ? parseFloat(data.sales) : 0,
+        orders: data ? parseInt(data.orders) : 0,
+        items_sold: data ? parseInt(data.items_sold) : 0,
+      });
+    }
+    
+    console.log("📈 Sales trend final data:", trend);
+    res.json({ trend });
+  } catch (error) {
+    console.error("Get sales trend error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+// Create sale (POS) with promo application and inventory management
+export const handleCreateSale: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const { branchId, items, paymentMethod, totalAmount, customerInfo, notes } = req.body;
+
+    // Validation
+    if (!branchId || !items || !Array.isArray(items) || items.length === 0) {
+      res.status(400).json({ error: "Branch ID and items are required" });
+      return;
+    }
+
+    if (!paymentMethod || !["cash", "card", "gcash", "paymaya", "bank_transfer"].includes(paymentMethod)) {
+      res.status(400).json({ error: "Valid payment method is required" });
+      return;
+    }
+
+    if (items.length > 100) {
+      res.status(400).json({ error: "Cannot process more than 100 items in a single sale" });
+      return;
+    }
+
+    // Start transaction
+    await connection.beginTransaction();
+
+    try {
+      // Validate and fetch all products with current prices and inventory
+      const productIds = items.map((item: any) => item.productId);
+      const [products] = await connection.query(
+        `SELECT 
+          p.id, p.name, p.price, p.sku, p.category,
+          COALESCE(SUM(i.quantity), 0) as total_stock
+         FROM products p
+         LEFT JOIN inventory i ON p.id = i.product_id AND i.branch_id = ?
+         WHERE p.id IN (?)
+         GROUP BY p.id`,
+        [branchId, productIds]
+      );
+
+      if ((products as any[]).length !== items.length) {
+        await connection.rollback();
+        res.status(400).json({ error: "One or more products not found" });
+        return;
+      }
+
+      const productMap = new Map((products as any[]).map(p => [p.id, p]));
+
+      // Validate inventory and prepare sale items
+      const preparedItems: any[] = [];
+      let calculatedSubtotal = 0;
+      let totalDiscountAmount = 0;
+      const inventoryUpdates: any[] = [];
+
+      for (const item of items) {
+        const product = productMap.get(item.productId);
+        
+        if (!product) {
+          await connection.rollback();
+          res.status(400).json({ error: `Product not found: ${item.productId}` });
+          return;
+        }
+
+        // Validate quantity
+        if (item.quantity <= 0 || !Number.isInteger(item.quantity)) {
+          await connection.rollback();
+          res.status(400).json({ 
+            error: `Invalid quantity for ${product.name}`,
+            product: product.name
+          });
+          return;
+        }
+
+        // Check stock availability
+        if (product.total_stock < item.quantity) {
+          await connection.rollback();
+          res.status(400).json({ 
+            error: `Insufficient stock for ${product.name}`,
+            product: product.name,
+            available: product.total_stock,
+            requested: item.quantity
+          });
+          return;
+        }
+
+        // Use current product price (not client-provided price for security)
+        const itemPrice = product.price;
+        const subtotal = itemPrice * item.quantity;
+        
+        // Check for applicable promo
+        const promo = await getValidPromoForProduct(connection, item.productId, subtotal);
+        
+        let discountAmount = 0;
+        let promoId = null;
+
+        if (promo) {
+          discountAmount = calculatePromoDiscount(
+            itemPrice,
+            item.quantity,
+            promo.discount_type,
+            promo.discount_value,
+            promo.max_discount
+          );
+          promoId = promo.id;
+          totalDiscountAmount += discountAmount;
+        }
+
+        const itemTotal = subtotal - discountAmount;
+        calculatedSubtotal += subtotal;
+
+        preparedItems.push({
+          productId: item.productId,
+          productName: product.name,
+          quantity: item.quantity,
+          price: itemPrice,
+          subtotal: subtotal,
+          discountAmount: discountAmount,
+          total: itemTotal,
+          promoId: promoId,
+          promoName: promo ? promo.name : null
+        });
+
+        inventoryUpdates.push({
+          productId: item.productId,
+          quantity: item.quantity
+        });
+      }
+
+      const finalTotal = calculatedSubtotal - totalDiscountAmount;
+
+      // Create sale record
+      const saleId = `sale-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const date = new Date();
+      const itemsCount = items.reduce((sum: number, item: any) => sum + item.quantity, 0);
+
+      console.log("💰 Creating sale:", { 
+        saleId, 
+        date: date.toISOString(), 
+        branchId, 
+        itemsCount,
+        subtotal: calculatedSubtotal,
+        discount: totalDiscountAmount,
+        total: finalTotal 
+      });
+
+      await connection.query(
+        `INSERT INTO sales (
+          id, date, branch_id, total_amount, items_count, 
+          payment_method, status, created_by, customer_info, notes,
+          subtotal, discount_amount
+        )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          saleId,
+          date,
+          branchId,
+          finalTotal,
+          itemsCount,
+          paymentMethod,
+          "completed",
+          req.session?.userId || null,
+          customerInfo ? JSON.stringify(customerInfo) : null,
+          notes || null,
+          calculatedSubtotal,
+          totalDiscountAmount
+        ]
+      );
+
+      // Insert sale items
+      for (const item of preparedItems) {
+        const itemId = `si-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        await connection.query(
+          `INSERT INTO sale_items (
+            id, sale_id, product_id, quantity, price, 
+            subtotal, discount_amount, total, promo_id
+          )
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            itemId, 
+            saleId, 
+            item.productId, 
+            item.quantity, 
+            item.price,
+            item.subtotal,
+            item.discountAmount,
+            item.total, 
+            item.promoId
+          ]
+        );
+      }
+
+      // Update inventory
+      for (const update of inventoryUpdates) {
+        // Check if inventory record exists
+        const [existing] = await connection.query(
+          `SELECT id, quantity FROM inventory WHERE product_id = ? AND branch_id = ?`,
+          [update.productId, branchId]
+        );
+
+        if ((existing as any[]).length > 0) {
+          // Update existing inventory
+          await connection.query(
+            `UPDATE inventory 
+             SET quantity = quantity - ?, last_stock_check = ?
+             WHERE product_id = ? AND branch_id = ?`,
+            [update.quantity, date, update.productId, branchId]
+          );
+        } else {
+          // Create inventory record if it doesn't exist (shouldn't happen, but safeguard)
+          const invId = `inv-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          await connection.query(
+            `INSERT INTO inventory (id, product_id, branch_id, quantity, min_stock_level, last_stock_check)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [invId, update.productId, branchId, -update.quantity, 0, date]
+          );
+        }
+      }
+
+      // Commit transaction
+      await connection.commit();
+
+      // Log activity
+      const user = req.session?.user;
+      await logActivity(connection, {
+        userId: req.session?.userId || null,
+        userName: user?.name || null,
+        userRole: user?.role || null,
+        action: "CREATE_SALE",
+        entityType: "sale",
+        entityId: saleId,
+        entityName: `Sale #${saleId}`,
+        description: `Completed sale with ${itemsCount} items totaling ₱${finalTotal.toFixed(2)}`,
+        metadata: {
+          itemsCount,
+          subtotal: calculatedSubtotal,
+          discount: totalDiscountAmount,
+          total: finalTotal,
+          paymentMethod,
+          promosApplied: preparedItems.filter(i => i.promoId).length,
+        },
+        ipAddress: req.ip || null,
+        userAgent: req.get("user-agent") || null,
+        branchId: branchId,
+      });
+
+      // Fetch the created sale with items
+      const [sale] = await connection.query(
+        `SELECT s.*, b.name as branch_name, u.name as cashier_name
+         FROM sales s
+         LEFT JOIN branches b ON s.branch_id = b.id
+         LEFT JOIN users u ON s.created_by = u.id
+         WHERE s.id = ?`, 
+        [saleId]
+      );
+      
+      const [saleItems] = await connection.query(
+        `SELECT 
+          si.*,
+          p.name as product_name,
+          p.sku as product_sku,
+          pr.name as promo_name
+        FROM sale_items si
+        JOIN products p ON si.product_id = p.id
+        LEFT JOIN promos pr ON si.promo_id = pr.id
+        WHERE si.sale_id = ?`,
+        [saleId]
+      );
+
+      const saleData = (sale as any[])[0];
+      const receipt = {
+        ...saleData,
+        items: saleItems,
+        subtotal: calculatedSubtotal,
+        discount_amount: totalDiscountAmount,
+        final_total: finalTotal,
+        customer_info: saleData.customer_info ? JSON.parse(saleData.customer_info) : null
+      };
+
+      console.log("✅ Sale created:", { 
+        saleId, 
+        branchId, 
+        items: preparedItems.length,
+        total: finalTotal,
+        discount: totalDiscountAmount,
+        promosApplied: preparedItems.filter(i => i.promoId).length
+      });
+
+      res.status(201).json({ 
+        sale: receipt,
+        message: "Sale completed successfully",
+        summary: {
+          items_count: itemsCount,
+          subtotal: calculatedSubtotal,
+          discount: totalDiscountAmount,
+          total: finalTotal,
+          promos_applied: preparedItems.filter(i => i.promoId).length
+        }
+      });
+    } catch (transactionError) {
+      await connection.rollback();
+      console.error("Transaction error:", transactionError);
+      throw transactionError;
+    }
+  } catch (error) {
+    console.error("Create sale error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+// Get pricing for products
+export const handleGetPricing: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const [pricing] = await connection.query(`
+      SELECT 
+        pr.*,
+        p.name as product_name
+      FROM pricing pr
+      JOIN products p ON pr.product_id = p.id
+      ORDER BY pr.effective_from DESC
+    `);
+    
+    res.json({ pricing });
+  } catch (error) {
+    console.error("Get pricing error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+// Update pricing
+export const handleUpdatePricing: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const { id } = req.params;
+    const { basePrice, wholesalePrice, retailPrice, distributorPrice, markup } = req.body;
+
+    const [existing] = await connection.query("SELECT * FROM pricing WHERE id = ?", [id]);
+    if ((existing as any[]).length === 0) {
+      res.status(404).json({ error: "Pricing not found" });
+      return;
+    }
+
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (basePrice !== undefined) {
+      updates.push("base_price = ?");
+      values.push(basePrice);
+    }
+    if (wholesalePrice !== undefined) {
+      updates.push("wholesale_price = ?");
+      values.push(wholesalePrice);
+    }
+    if (retailPrice !== undefined) {
+      updates.push("retail_price = ?");
+      values.push(retailPrice);
+    }
+    if (distributorPrice !== undefined) {
+      updates.push("distributor_price = ?");
+      values.push(distributorPrice);
+    }
+    if (markup !== undefined) {
+      updates.push("markup = ?");
+      values.push(markup);
+    }
+
+    if (updates.length === 0) {
+      res.status(400).json({ error: "No fields to update" });
+      return;
+    }
+
+    values.push(id);
+    await connection.query(`UPDATE pricing SET ${updates.join(", ")} WHERE id = ?`, values);
+
+    const [pricing] = await connection.query(`
+      SELECT 
+        pr.*,
+        p.name as product_name
+      FROM pricing pr
+      JOIN products p ON pr.product_id = p.id
+      WHERE pr.id = ?
+    `, [id]);
+
+    res.json({ pricing: (pricing as any[])[0] });
+  } catch (error) {
+    console.error("Update pricing error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+// Customer order handler (public endpoint, no authentication required)
+export const handleCreateCustomerOrder: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const { branchId, items, paymentMethod, customerInfo, notes } = req.body;
+
+    // Validation
+    if (!branchId || !items || !Array.isArray(items) || items.length === 0) {
+      res.status(400).json({ error: "Branch ID and items are required" });
+      return;
+    }
+
+    if (!paymentMethod || !["cash", "card", "gcash", "paymaya", "bank_transfer"].includes(paymentMethod)) {
+      res.status(400).json({ error: "Valid payment method is required" });
+      return;
+    }
+
+    if (!customerInfo || !customerInfo.name || !customerInfo.phone) {
+      res.status(400).json({ error: "Customer name and phone are required" });
+      return;
+    }
+
+    if (items.length > 100) {
+      res.status(400).json({ error: "Cannot process more than 100 items in a single order" });
+      return;
+    }
+
+    // Start transaction
+    await connection.beginTransaction();
+
+    try {
+      // Validate and fetch all products with current prices and inventory
+      const productIds = items.map((item: any) => item.productId);
+      const [products] = await connection.query(
+        `SELECT 
+          p.id, p.name, p.price, p.sku, p.category,
+          COALESCE(SUM(i.quantity), 0) as total_stock
+         FROM products p
+         LEFT JOIN inventory i ON p.id = i.product_id AND i.branch_id = ?
+         WHERE p.id IN (?)
+         GROUP BY p.id`,
+        [branchId, productIds]
+      );
+
+      if ((products as any[]).length !== items.length) {
+        await connection.rollback();
+        res.status(400).json({ error: "One or more products not found" });
+        return;
+      }
+
+      const productMap = new Map((products as any[]).map(p => [p.id, p]));
+
+      // Validate inventory and prepare sale items
+      const preparedItems: any[] = [];
+      let calculatedSubtotal = 0;
+      let totalDiscountAmount = 0;
+      const inventoryUpdates: any[] = [];
+
+      for (const item of items) {
+        const product = productMap.get(item.productId);
+        
+        if (!product) {
+          await connection.rollback();
+          res.status(400).json({ error: `Product not found: ${item.productId}` });
+          return;
+        }
+
+        // Validate quantity
+        if (item.quantity <= 0 || !Number.isInteger(item.quantity)) {
+          await connection.rollback();
+          res.status(400).json({ 
+            error: `Invalid quantity for ${product.name}`,
+            product: product.name
+          });
+          return;
+        }
+
+        // Check stock availability
+        if (product.total_stock < item.quantity) {
+          await connection.rollback();
+          res.status(400).json({ 
+            error: `Insufficient stock for ${product.name}`,
+            product: product.name,
+            available: product.total_stock,
+            requested: item.quantity
+          });
+          return;
+        }
+
+        // Use current product price (not client-provided price for security)
+        const itemPrice = product.price;
+        const subtotal = itemPrice * item.quantity;
+        
+        // Check for applicable promo
+        const promo = await getValidPromoForProduct(connection, item.productId, subtotal);
+        
+        let discountAmount = 0;
+        let promoId = null;
+
+        if (promo) {
+          discountAmount = calculatePromoDiscount(
+            itemPrice,
+            item.quantity,
+            promo.discount_type,
+            promo.discount_value,
+            promo.max_discount
+          );
+          promoId = promo.id;
+          totalDiscountAmount += discountAmount;
+        }
+
+        const itemTotal = subtotal - discountAmount;
+        calculatedSubtotal += subtotal;
+
+        preparedItems.push({
+          productId: item.productId,
+          productName: product.name,
+          quantity: item.quantity,
+          price: itemPrice,
+          subtotal: subtotal,
+          discountAmount: discountAmount,
+          total: itemTotal,
+          promoId: promoId,
+          promoName: promo ? promo.name : null
+        });
+
+        inventoryUpdates.push({
+          productId: item.productId,
+          quantity: item.quantity
+        });
+      }
+
+      const finalTotal = calculatedSubtotal - totalDiscountAmount;
+
+      // Create sale record
+      const saleId = `sale-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const date = new Date();
+      const itemsCount = items.reduce((sum: number, item: any) => sum + item.quantity, 0);
+
+      console.log("🛒 Creating customer order:", { 
+        saleId, 
+        date: date.toISOString(), 
+        branchId, 
+        itemsCount,
+        subtotal: calculatedSubtotal,
+        discount: totalDiscountAmount,
+        total: finalTotal,
+        customer: customerInfo.name
+      });
+
+      await connection.query(
+        `INSERT INTO sales (
+          id, date, branch_id, total_amount, items_count, 
+          payment_method, status, created_by, customer_info, notes,
+          subtotal, discount_amount
+        )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          saleId,
+          date,
+          branchId,
+          finalTotal,
+          itemsCount,
+          paymentMethod,
+          "completed",
+          null, // No user ID for customer orders
+          JSON.stringify(customerInfo),
+          notes || null,
+          calculatedSubtotal,
+          totalDiscountAmount
+        ]
+      );
+
+      // Insert sale items
+      for (const item of preparedItems) {
+        const itemId = `si-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        await connection.query(
+          `INSERT INTO sale_items (
+            id, sale_id, product_id, quantity, price, 
+            subtotal, discount_amount, total, promo_id
+          )
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            itemId, 
+            saleId, 
+            item.productId, 
+            item.quantity, 
+            item.price,
+            item.subtotal,
+            item.discountAmount,
+            item.total, 
+            item.promoId
+          ]
+        );
+      }
+
+      // Update inventory
+      for (const update of inventoryUpdates) {
+        const [existing] = await connection.query(
+          `SELECT id, quantity FROM inventory WHERE product_id = ? AND branch_id = ?`,
+          [update.productId, branchId]
+        );
+
+        if ((existing as any[]).length > 0) {
+          await connection.query(
+            `UPDATE inventory 
+             SET quantity = quantity - ?, last_stock_check = ?
+             WHERE product_id = ? AND branch_id = ?`,
+            [update.quantity, date, update.productId, branchId]
+          );
+        }
+      }
+
+      // Commit transaction
+      await connection.commit();
+
+      // Fetch the created sale with items
+      const [sale] = await connection.query(
+        `SELECT s.*, b.name as branch_name
+         FROM sales s
+         LEFT JOIN branches b ON s.branch_id = b.id
+         WHERE s.id = ?`, 
+        [saleId]
+      );
+      
+      const [saleItems] = await connection.query(
+        `SELECT 
+          si.*,
+          p.name as product_name,
+          p.sku as product_sku,
+          pr.name as promo_name
+        FROM sale_items si
+        JOIN products p ON si.product_id = p.id
+        LEFT JOIN promos pr ON si.promo_id = pr.id
+        WHERE si.sale_id = ?`,
+        [saleId]
+      );
+
+      const saleData = (sale as any[])[0];
+      const receipt = {
+        ...saleData,
+        items: saleItems,
+        subtotal: calculatedSubtotal,
+        discount_amount: totalDiscountAmount,
+        final_total: finalTotal,
+        customer_info: saleData.customer_info ? JSON.parse(saleData.customer_info) : null
+      };
+
+      console.log("✅ Customer order created:", { 
+        saleId, 
+        branchId, 
+        items: preparedItems.length,
+        total: finalTotal,
+        discount: totalDiscountAmount,
+        customer: customerInfo.name
+      });
+
+      res.status(201).json({ 
+        sale: receipt,
+        message: "Order placed successfully",
+        summary: {
+          items_count: itemsCount,
+          subtotal: calculatedSubtotal,
+          discount: totalDiscountAmount,
+          total: finalTotal,
+          promos_applied: preparedItems.filter(i => i.promoId).length
+        }
+      });
+    } catch (transactionError) {
+      await connection.rollback();
+      console.error("Transaction error:", transactionError);
+      throw transactionError;
+    }
+  } catch (error) {
+    console.error("Create customer order error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};

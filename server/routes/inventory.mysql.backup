@@ -1,0 +1,601 @@
+import { RequestHandler } from "express";
+import { getConnection } from "../db";
+
+// Get all inventory
+export const handleGetInventory: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const { branchId } = req.query;
+    
+    let query = `
+      SELECT 
+        i.*,
+        p.name as product_name,
+        b.name as branch_name
+      FROM inventory i
+      JOIN products p ON i.product_id = p.id
+      JOIN branches b ON i.branch_id = b.id
+    `;
+    
+    const params: any[] = [];
+    
+    if (branchId) {
+      query += " WHERE i.branch_id = ?";
+      params.push(branchId);
+    }
+    
+    query += " ORDER BY i.last_stock_check DESC";
+    
+    const [inventory] = await connection.query(query, params);
+    res.json({ inventory });
+  } catch (error) {
+    console.error("Get inventory error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+// Get low stock items
+export const handleGetLowStock: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const [inventory] = await connection.query(`
+      SELECT 
+        i.*,
+        p.name as product_name,
+        b.name as branch_name
+      FROM inventory i
+      JOIN products p ON i.product_id = p.id
+      JOIN branches b ON i.branch_id = b.id
+      WHERE i.quantity <= i.reorder_level
+      ORDER BY (i.quantity - i.reorder_level) ASC
+    `);
+    
+    res.json({ inventory });
+  } catch (error) {
+    console.error("Get low stock error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+// Update inventory quantity
+export const handleUpdateInventory: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const { id } = req.params;
+    const { quantity, reorder_level, reorderLevel } = req.body;
+
+    const [existing] = await connection.query("SELECT * FROM inventory WHERE id = ?", [id]);
+    if ((existing as any[]).length === 0) {
+      res.status(404).json({ error: "Inventory item not found" });
+      return;
+    }
+
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (quantity !== undefined) {
+      updates.push("quantity = ?");
+      values.push(quantity);
+    }
+    
+    // Support both camelCase and snake_case
+    const reorderLevelValue = reorder_level !== undefined ? reorder_level : reorderLevel;
+    if (reorderLevelValue !== undefined) {
+      updates.push("reorder_level = ?");
+      values.push(reorderLevelValue);
+    }
+
+    updates.push("last_stock_check = ?");
+    values.push(new Date());
+
+    if (updates.length === 1) { // Only last_stock_check was added
+      res.status(400).json({ error: "No fields to update" });
+      return;
+    }
+
+    values.push(id);
+    await connection.query(`UPDATE inventory SET ${updates.join(", ")} WHERE id = ?`, values);
+
+    const [inventory] = await connection.query(`
+      SELECT 
+        i.*,
+        p.name as product_name,
+        b.name as branch_name
+      FROM inventory i
+      JOIN products p ON i.product_id = p.id
+      JOIN branches b ON i.branch_id = b.id
+      WHERE i.id = ?
+    `, [id]);
+    
+    res.json({ inventory: (inventory as any[])[0] });
+  } catch (error) {
+    console.error("Update inventory error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+// Add inventory for a product at a branch
+export const handleAddInventory: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    // Support both camelCase and snake_case
+    const { 
+      productId, product_id, 
+      branchId, branch_id, 
+      quantity, 
+      reorderLevel, reorder_level 
+    } = req.body;
+
+    const finalProductId = product_id || productId;
+    const finalBranchId = branch_id || branchId;
+    const finalReorderLevel = reorder_level || reorderLevel || 50;
+
+    if (!finalProductId || !finalBranchId || quantity == null) {
+      res.status(400).json({ error: "Product ID, branch ID, and quantity are required" });
+      return;
+    }
+
+    // Check if inventory already exists for this product-branch combo
+    const [existing] = await connection.query(
+      "SELECT id FROM inventory WHERE product_id = ? AND branch_id = ?",
+      [finalProductId, finalBranchId]
+    );
+
+    if ((existing as any[]).length > 0) {
+      res.status(409).json({ error: "Inventory already exists for this product at this branch" });
+      return;
+    }
+
+    const id = `inv-${Date.now()}`;
+    const lastStockCheck = new Date();
+
+    await connection.query(
+      `INSERT INTO inventory (id, product_id, branch_id, quantity, reorder_level, last_stock_check)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, finalProductId, finalBranchId, quantity, finalReorderLevel, lastStockCheck]
+    );
+
+    const [inventory] = await connection.query(`
+      SELECT 
+        i.*,
+        p.name as product_name,
+        b.name as branch_name
+      FROM inventory i
+      JOIN products p ON i.product_id = p.id
+      JOIN branches b ON i.branch_id = b.id
+      WHERE i.id = ?
+    `, [id]);
+
+    res.status(201).json({ inventory: (inventory as any[])[0] });
+  } catch (error) {
+    console.error("Add inventory error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+// Delete inventory entry
+export const handleDeleteInventory: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const { id } = req.params;
+
+    const [existing] = await connection.query("SELECT * FROM inventory WHERE id = ?", [id]);
+    if ((existing as any[]).length === 0) {
+      res.status(404).json({ error: "Inventory item not found" });
+      return;
+    }
+
+    await connection.query("DELETE FROM inventory WHERE id = ?", [id]);
+    res.json({ message: "Inventory item deleted successfully" });
+  } catch (error) {
+    console.error("Delete inventory error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+// Stock transfer between branches
+export const handleStockTransfer: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const { from_branch_id, to_branch_id, product_id, quantity, reason, password } = req.body;
+
+    // Validation
+    if (!from_branch_id || !to_branch_id || !product_id || !quantity) {
+      res.status(400).json({ error: "Missing required fields" });
+      return;
+    }
+
+    if (quantity <= 0) {
+      res.status(400).json({ error: "Quantity must be greater than 0" });
+      return;
+    }
+
+    if (from_branch_id === to_branch_id) {
+      res.status(400).json({ error: "Cannot transfer to the same branch" });
+      return;
+    }
+
+    // Check if password verification is required for large transfers (>100 units)
+    const isLargeTransfer = quantity > 100;
+    if (isLargeTransfer && !password) {
+      res.status(400).json({ 
+        error: "Password verification required for large transfers",
+        requiresPassword: true,
+        threshold: 100
+      });
+      return;
+    }
+
+    // Verify password for large transfers
+    if (isLargeTransfer && password) {
+      const bcrypt = require("bcryptjs");
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        res.status(401).json({ error: "User not authenticated" });
+        return;
+      }
+
+      const [users] = await connection.query("SELECT password_hash FROM users WHERE id = ?", [userId]);
+      const user = (users as any[])[0];
+
+      if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+        res.status(403).json({ error: "Invalid password" });
+        return;
+      }
+    }
+
+    // Start transaction
+    await connection.beginTransaction();
+
+    try {
+      // Check source branch inventory
+      const [sourceInventory] = await connection.query(
+        "SELECT * FROM inventory WHERE product_id = ? AND branch_id = ?",
+        [product_id, from_branch_id]
+      );
+
+      if ((sourceInventory as any[]).length === 0) {
+        await connection.rollback();
+        res.status(404).json({ error: "Product not found in source branch" });
+        return;
+      }
+
+      const sourceItem = (sourceInventory as any[])[0];
+      if (sourceItem.quantity < quantity) {
+        await connection.rollback();
+        res.status(400).json({ 
+          error: `Insufficient stock. Available: ${sourceItem.quantity}, Requested: ${quantity}` 
+        });
+        return;
+      }
+
+      // Check destination branch inventory
+      const [destInventory] = await connection.query(
+        "SELECT * FROM inventory WHERE product_id = ? AND branch_id = ?",
+        [product_id, to_branch_id]
+      );
+
+      if ((destInventory as any[]).length === 0) {
+        await connection.rollback();
+        res.status(404).json({ error: "Product not found in destination branch" });
+        return;
+      }
+
+      // Update source branch (decrease)
+      await connection.query(
+        "UPDATE inventory SET quantity = quantity - ?, last_stock_check = NOW() WHERE product_id = ? AND branch_id = ?",
+        [quantity, product_id, from_branch_id]
+      );
+
+      // Update destination branch (increase)
+      await connection.query(
+        "UPDATE inventory SET quantity = quantity + ?, last_stock_check = NOW() WHERE product_id = ? AND branch_id = ?",
+        [quantity, product_id, to_branch_id]
+      );
+
+      // Get branch and product names for response and logging
+      const [branches] = await connection.query("SELECT id, name FROM branches WHERE id IN (?, ?)", [from_branch_id, to_branch_id]);
+      const [product] = await connection.query("SELECT id, name FROM products WHERE id = ?", [product_id]);
+
+      const branchMap = new Map((branches as any[]).map(b => [b.id, b.name]));
+      const productName = (product as any[])[0]?.name;
+      const fromBranchName = branchMap.get(from_branch_id) || "Unknown";
+      const toBranchName = branchMap.get(to_branch_id) || "Unknown";
+
+      // Log the transfer
+      const logId = `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const transferDate = new Date();
+      const approvedBy = req.user?.id || "system";
+      const approvedByName = req.user?.name || "System";
+
+      await connection.query(
+        `INSERT INTO stock_transfer_logs 
+        (id, transfer_date, product_id, product_name, from_branch_id, from_branch_name, 
+         to_branch_id, to_branch_name, quantity, reason, approved_by, approved_by_name, status, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          logId,
+          transferDate,
+          product_id,
+          productName,
+          from_branch_id,
+          fromBranchName,
+          to_branch_id,
+          toBranchName,
+          quantity,
+          reason || "Stock transfer",
+          approvedBy,
+          approvedByName,
+          "completed",
+          isLargeTransfer ? "Large transfer - Password verified" : null
+        ]
+      );
+
+      // Get updated quantities
+      const [updatedSource] = await connection.query(
+        "SELECT quantity FROM inventory WHERE product_id = ? AND branch_id = ?",
+        [product_id, from_branch_id]
+      );
+      const [updatedDest] = await connection.query(
+        "SELECT quantity FROM inventory WHERE product_id = ? AND branch_id = ?",
+        [product_id, to_branch_id]
+      );
+
+      // Commit transaction
+      await connection.commit();
+
+      res.json({
+        message: "Stock transferred successfully",
+        transfer: {
+          log_id: logId,
+          product_id,
+          product_name: productName,
+          from_branch: fromBranchName,
+          from_branch_id,
+          from_remaining_stock: (updatedSource as any[])[0]?.quantity || 0,
+          to_branch: toBranchName,
+          to_branch_id,
+          to_new_stock: (updatedDest as any[])[0]?.quantity || 0,
+          quantity,
+          reason: reason || "Stock transfer",
+          transferred_at: transferDate,
+          approved_by: approvedByName,
+          was_large_transfer: isLargeTransfer
+        }
+      });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    }
+  } catch (error) {
+    console.error("Stock transfer error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+// Get product availability across all branches
+export const handleGetProductAvailability: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const { productId } = req.params;
+
+    const [inventory] = await connection.query(`
+      SELECT 
+        i.*,
+        p.name as product_name,
+        p.price,
+        p.image,
+        b.name as branch_name,
+        b.location as branch_location,
+        b.phone as branch_phone
+      FROM inventory i
+      JOIN products p ON i.product_id = p.id
+      JOIN branches b ON i.branch_id = b.id
+      WHERE i.product_id = ?
+      ORDER BY i.quantity DESC
+    `, [productId]);
+
+    if ((inventory as any[]).length === 0) {
+      res.status(404).json({ error: "Product not found in any branch" });
+      return;
+    }
+
+    const totalQuantity = (inventory as any[]).reduce((sum: number, item: any) => sum + item.quantity, 0);
+    const branchesInStock = (inventory as any[]).filter((item: any) => item.quantity > 0).length;
+    const branchesLowStock = (inventory as any[]).filter((item: any) => item.quantity > 0 && item.quantity <= item.reorder_level).length;
+
+    res.json({
+      product_id: productId,
+      product_name: (inventory as any[])[0].product_name,
+      price: (inventory as any[])[0].price,
+      image: (inventory as any[])[0].image,
+      total_quantity: totalQuantity,
+      branches_in_stock: branchesInStock,
+      branches_low_stock: branchesLowStock,
+      total_branches: (inventory as any[]).length,
+      branches: inventory
+    });
+  } catch (error) {
+    console.error("Get product availability error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+// Enhanced reporting: Get inventory summary
+export const handleGetInventorySummary: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const { branchId } = req.query;
+
+    // Total inventory value
+    const valueQuery = branchId
+      ? `SELECT SUM(i.quantity * p.price) as total_value 
+         FROM inventory i 
+         JOIN products p ON i.product_id = p.id 
+         WHERE i.branch_id = ?`
+      : `SELECT SUM(i.quantity * p.price) as total_value 
+         FROM inventory i 
+         JOIN products p ON i.product_id = p.id`;
+
+    const [valueResult] = await connection.query(
+      valueQuery,
+      branchId ? [branchId] : []
+    );
+
+    // Low stock count
+    const lowStockQuery = branchId
+      ? "SELECT COUNT(*) as low_stock_count FROM inventory WHERE quantity <= reorder_level AND branch_id = ?"
+      : "SELECT COUNT(*) as low_stock_count FROM inventory WHERE quantity <= reorder_level";
+
+    const [lowStockResult] = await connection.query(
+      lowStockQuery,
+      branchId ? [branchId] : []
+    );
+
+    // Out of stock count
+    const outOfStockQuery = branchId
+      ? "SELECT COUNT(*) as out_of_stock_count FROM inventory WHERE quantity = 0 AND branch_id = ?"
+      : "SELECT COUNT(*) as out_of_stock_count FROM inventory WHERE quantity = 0";
+
+    const [outOfStockResult] = await connection.query(
+      outOfStockQuery,
+      branchId ? [branchId] : []
+    );
+
+    // Total products
+    const totalProductsQuery = branchId
+      ? "SELECT COUNT(*) as total_products FROM inventory WHERE branch_id = ?"
+      : "SELECT COUNT(DISTINCT product_id) as total_products FROM inventory";
+
+    const [totalProductsResult] = await connection.query(
+      totalProductsQuery,
+      branchId ? [branchId] : []
+    );
+
+    // Top products by quantity
+    const topProductsQuery = branchId
+      ? `SELECT p.name, i.quantity, p.price, i.quantity * p.price as value
+         FROM inventory i
+         JOIN products p ON i.product_id = p.id
+         WHERE i.branch_id = ?
+         ORDER BY i.quantity DESC
+         LIMIT 10`
+      : `SELECT p.name, SUM(i.quantity) as quantity, p.price, SUM(i.quantity * p.price) as value
+         FROM inventory i
+         JOIN products p ON i.product_id = p.id
+         GROUP BY p.id, p.name, p.price
+         ORDER BY quantity DESC
+         LIMIT 10`;
+
+    const [topProducts] = await connection.query(
+      topProductsQuery,
+      branchId ? [branchId] : []
+    );
+
+    // Category breakdown
+    const categoryQuery = branchId
+      ? `SELECT p.category, COUNT(*) as product_count, SUM(i.quantity) as total_quantity, SUM(i.quantity * p.price) as total_value
+         FROM inventory i
+         JOIN products p ON i.product_id = p.id
+         WHERE i.branch_id = ?
+         GROUP BY p.category
+         ORDER BY total_value DESC`
+      : `SELECT p.category, COUNT(DISTINCT i.product_id) as product_count, SUM(i.quantity) as total_quantity, SUM(i.quantity * p.price) as total_value
+         FROM inventory i
+         JOIN products p ON i.product_id = p.id
+         GROUP BY p.category
+         ORDER BY total_value DESC`;
+
+    const [categoryBreakdown] = await connection.query(
+      categoryQuery,
+      branchId ? [branchId] : []
+    );
+
+    res.json({
+      summary: {
+        total_value: parseFloat((valueResult as any[])[0].total_value || 0).toFixed(2),
+        low_stock_count: (lowStockResult as any[])[0].low_stock_count,
+        out_of_stock_count: (outOfStockResult as any[])[0].out_of_stock_count,
+        total_products: (totalProductsResult as any[])[0].total_products,
+      },
+      top_products: topProducts,
+      category_breakdown: categoryBreakdown,
+      branch_id: branchId || "all"
+    });
+  } catch (error) {
+    console.error("Get inventory summary error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+// Get stock transfer logs
+export const handleGetTransferLogs: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const { branchId, productId, startDate, endDate, limit = 50 } = req.query;
+
+    let query = `
+      SELECT 
+        stl.*,
+        p.image as product_image,
+        u.email as approved_by_email
+      FROM stock_transfer_logs stl
+      LEFT JOIN products p ON stl.product_id = p.id
+      LEFT JOIN users u ON stl.approved_by = u.id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
+    if (branchId) {
+      query += " AND (stl.from_branch_id = ? OR stl.to_branch_id = ?)";
+      params.push(branchId, branchId);
+    }
+
+    if (productId) {
+      query += " AND stl.product_id = ?";
+      params.push(productId);
+    }
+
+    if (startDate) {
+      query += " AND stl.transfer_date >= ?";
+      params.push(startDate);
+    }
+
+    if (endDate) {
+      query += " AND stl.transfer_date <= ?";
+      params.push(endDate);
+    }
+
+    query += " ORDER BY stl.transfer_date DESC LIMIT ?";
+    params.push(parseInt(limit as string));
+
+    const [logs] = await connection.query(query, params);
+
+    res.json({ 
+      logs,
+      count: (logs as any[]).length
+    });
+  } catch (error) {
+    console.error("Get transfer logs error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
