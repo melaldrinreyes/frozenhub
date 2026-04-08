@@ -1,5 +1,8 @@
-import { createServer } from "../server/index.ts";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+
+// Vercel executes this file in Node.js directly. Import the prebuilt server bundle
+// to avoid runtime TypeScript module resolution issues.
+const { createServer } = await import("../dist/serverless/index.mjs");
 
 const app = createServer();
 
