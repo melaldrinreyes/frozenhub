@@ -1,4 +1,4 @@
-import { createServer } from "../server/index";
+import { createServer } from "../server/index.ts";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const app = createServer();
