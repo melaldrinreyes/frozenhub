@@ -8,7 +8,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/lib/authContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import GuestRoute from "@/components/GuestRoute";
 
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -53,11 +52,7 @@ const App = () => (
             {/* Public Routes */}
             <Route
               path="/"
-              element={
-                <GuestRoute>
-                  <Index />
-                </GuestRoute>
-              }
+              element={<Index />}
             />
             <Route path="/deals" element={<Navigate to="/" replace />} />
             <Route path="/shop" element={<Navigate to="/" replace />} />
