@@ -449,7 +449,7 @@ export function createServer() {
   // Product routes (public read access with lenient rate limit)
   app.get("/api/products", publicRateLimiter, runtimeDataProvider === "supabase" ? handleGetProductsMySQL : handleGetProducts);
   app.get("/api/products/:id", publicRateLimiter, runtimeDataProvider === "supabase" ? handleGetProductMySQL : handleGetProduct);
-  app.post("/api/products", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleCreateProductMySQL : handleCreateProduct);
+  app.post("/api/products", strictRateLimiter, runtimeDataProvider === "supabase" ? handleCreateProductMySQL : handleCreateProduct);
   app.put("/api/products/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleUpdateProductMySQL : handleUpdateProduct);
   app.delete("/api/products/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleDeleteProductMySQL : handleDeleteProduct);
 

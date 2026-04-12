@@ -337,23 +337,37 @@ export const handleDeleteProductMySQL: RequestHandler = async (req, res) => {
   let connection;
   try {
     connection = await getConnection();
+
+    const [existingRows] = await connection.query(
+      "SELECT id, name, sku, category FROM products WHERE id = ? LIMIT 1",
+      [id]
+    );
+    const existingProduct = (existingRows as any[])[0];
+
     const [result] = await connection.query("DELETE FROM products WHERE id = ?", [id]);
     if (Number((result as any)?.affectedRows || 0) === 0) {
       res.status(404).json({ error: "Product not found" });
       return;
     }
+
+    const actor = req.user || req.session?.user || null;
+
     await logActivity(connection, {
-      userId: req.user?.id || null,
-      userName: req.user?.name || null,
-      userRole: req.user?.role || null,
+      userId: actor?.id || null,
+      userName: actor?.name || null,
+      userRole: actor?.role || null,
       action: "DELETE_PRODUCT",
       entityType: "product",
       entityId: id,
-      entityName: `Product #${id}`,
-      description: "Product deleted",
-      metadata: { product_id: id },
+      entityName: existingProduct?.name || `Product #${id}`,
+      description: `Product ${existingProduct?.name || id} deleted`,
+      metadata: {
+        product_id: id,
+        sku: existingProduct?.sku || null,
+        category: existingProduct?.category || null,
+      },
       ipAddress: req.ip || null,
-      branchId: req.user?.branch_id || null,
+      branchId: actor?.branch_id || null,
     });
     res.json({ message: "Product deleted successfully" });
   } catch (error) {
