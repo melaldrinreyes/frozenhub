@@ -129,6 +129,20 @@ export default function BranchSales() {
   const sales = salesData?.sales || [];
   const chartData = salesTrend?.trend || [];
 
+  const { data: expandedSaleItems = [] } = useQuery({
+    queryKey: ["branch-sale-items", expandedSaleId],
+    queryFn: async () => {
+      if (!expandedSaleId) return [];
+      const result = await apiClient.getSaleItems(expandedSaleId);
+      return (result.items || []).map((item: any) => ({
+        ...item,
+        unit_price: Number(item.unit_price ?? item.price ?? 0),
+        subtotal: Number(item.subtotal ?? item.total ?? 0),
+      }));
+    },
+    enabled: !!expandedSaleId,
+  });
+
   const { items: paginatedSales, totalPages } = paginateItems(
     sales,
     currentPage,
@@ -485,7 +499,7 @@ export default function BranchSales() {
                           })}
                         </td>
                         <td className="py-4 px-4 text-center font-semibold text-slate-900 border-r border-slate-200">
-                          {sale.items?.length || 0}
+                          {Number(sale.items_count ?? sale.items?.length ?? 0)}
                         </td>
                         <td className="py-4 px-4 font-bold text-slate-900 border-r border-slate-200">
                           ₱{parseFloat(sale.total_amount || 0).toFixed(2)}
@@ -539,33 +553,37 @@ export default function BranchSales() {
                           </Button>
                         </td>
                       </tr>
-                      {expandedSaleId === sale.id && sale.items && sale.items.length > 0 && (
+                      {expandedSaleId === sale.id && (
                         <tr key={`sale-${sale.id}-items`} className="bg-slate-100 border-b-2 border-slate-300">
                           <td colSpan={8} className="py-4 px-4">
                             <div className="ml-8 border-2 border-slate-200 rounded-lg p-4 bg-white">
                               <h4 className="font-semibold text-slate-900 mb-3 text-sm">Items Purchased:</h4>
-                              <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                  <thead className="bg-slate-50">
-                                    <tr className="border-b-2 border-slate-200">
-                                      <th className="text-left py-2 px-3 font-semibold text-slate-700 border-r border-slate-200">Product</th>
-                                      <th className="text-right py-2 px-3 font-semibold text-slate-700 border-r border-slate-200">Unit Price</th>
-                                      <th className="text-right py-2 px-3 font-semibold text-slate-700 border-r border-slate-200">Quantity</th>
-                                      <th className="text-right py-2 px-3 font-semibold text-slate-700">Subtotal</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {sale.items.map((item: any, itemIndex: number) => (
-                                      <tr key={`item-${sale.id}-${item.id}`} className={`border-b border-slate-100 ${itemIndex % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
-                                        <td className="py-2 px-3 text-slate-700 font-medium border-r border-slate-200">{item.product_name}</td>
-                                        <td className="py-2 px-3 text-right text-slate-600 border-r border-slate-200">₱{parseFloat(item.unit_price || 0).toFixed(2)}</td>
-                                        <td className="py-2 px-3 text-right text-slate-600 border-r border-slate-200">{item.quantity || 0}</td>
-                                        <td className="py-2 px-3 text-right font-bold text-slate-900">₱{parseFloat(item.subtotal || 0).toFixed(2)}</td>
+                              {expandedSaleItems.length > 0 ? (
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-sm">
+                                    <thead className="bg-slate-50">
+                                      <tr className="border-b-2 border-slate-200">
+                                        <th className="text-left py-2 px-3 font-semibold text-slate-700 border-r border-slate-200">Product</th>
+                                        <th className="text-right py-2 px-3 font-semibold text-slate-700 border-r border-slate-200">Unit Price</th>
+                                        <th className="text-right py-2 px-3 font-semibold text-slate-700 border-r border-slate-200">Quantity</th>
+                                        <th className="text-right py-2 px-3 font-semibold text-slate-700">Subtotal</th>
                                       </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
+                                    </thead>
+                                    <tbody>
+                                      {expandedSaleItems.map((item: any, itemIndex: number) => (
+                                        <tr key={`item-${sale.id}-${item.id || itemIndex}`} className={`border-b border-slate-100 ${itemIndex % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
+                                          <td className="py-2 px-3 text-slate-700 font-medium border-r border-slate-200">{item.product_name || "Unknown Product"}</td>
+                                          <td className="py-2 px-3 text-right text-slate-600 border-r border-slate-200">₱{parseFloat(item.unit_price || 0).toFixed(2)}</td>
+                                          <td className="py-2 px-3 text-right text-slate-600 border-r border-slate-200">{item.quantity || 0}</td>
+                                          <td className="py-2 px-3 text-right font-bold text-slate-900">₱{parseFloat(item.subtotal || 0).toFixed(2)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              ) : (
+                                <p className="text-sm text-slate-500">No item details found for this order.</p>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -639,7 +657,7 @@ export default function BranchSales() {
                     <div className="grid grid-cols-2 gap-3 mb-3 pb-3 border-b border-slate-200">
                       <div>
                         <div className="text-xs text-slate-600 font-medium mb-1">Items</div>
-                        <div className="text-xl font-bold text-slate-900">{sale.items?.length || 0}</div>
+                        <div className="text-xl font-bold text-slate-900">{Number(sale.items_count ?? sale.items?.length ?? 0)}</div>
                       </div>
                       <div>
                         <div className="text-xs text-slate-600 font-medium mb-1">Payment</div>
@@ -692,30 +710,34 @@ export default function BranchSales() {
                     </div>
 
                     {/* Expanded Items */}
-                    {isExpanded && sale.items && sale.items.length > 0 && (
+                    {isExpanded && (
                       <div className="mt-3 pt-3 border-t-2 border-slate-200">
                         <h4 className="font-semibold text-slate-900 mb-2 text-xs">Items Purchased:</h4>
-                        <div className="space-y-2">
-                          {sale.items.map((item: any) => (
-                            <div key={item.id} className="bg-white border border-slate-200 rounded p-2 text-xs">
-                              <div className="font-medium text-slate-900 mb-1">{item.product_name}</div>
-                              <div className="grid grid-cols-3 gap-2 text-slate-600">
-                                <div>
-                                  <span className="text-[10px] text-slate-500">Price:</span>
-                                  <div className="font-semibold">₱{parseFloat(item.unit_price || 0).toFixed(2)}</div>
-                                </div>
-                                <div>
-                                  <span className="text-[10px] text-slate-500">Qty:</span>
-                                  <div className="font-semibold">{item.quantity || 0}</div>
-                                </div>
-                                <div>
-                                  <span className="text-[10px] text-slate-500">Total:</span>
-                                  <div className="font-bold text-slate-900">₱{parseFloat(item.subtotal || 0).toFixed(2)}</div>
+                        {expandedSaleItems.length > 0 ? (
+                          <div className="space-y-2">
+                            {expandedSaleItems.map((item: any, itemIndex: number) => (
+                              <div key={item.id || itemIndex} className="bg-white border border-slate-200 rounded p-2 text-xs">
+                                <div className="font-medium text-slate-900 mb-1">{item.product_name || "Unknown Product"}</div>
+                                <div className="grid grid-cols-3 gap-2 text-slate-600">
+                                  <div>
+                                    <span className="text-[10px] text-slate-500">Price:</span>
+                                    <div className="font-semibold">₱{parseFloat(item.unit_price || 0).toFixed(2)}</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] text-slate-500">Qty:</span>
+                                    <div className="font-semibold">{item.quantity || 0}</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] text-slate-500">Total:</span>
+                                    <div className="font-bold text-slate-900">₱{parseFloat(item.subtotal || 0).toFixed(2)}</div>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-500">No item details found for this order.</p>
+                        )}
                       </div>
                     )}
                   </div>
