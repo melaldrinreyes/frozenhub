@@ -70,6 +70,9 @@ export default function RiderProfile() {
         user.branch_id,
         startDate.toISOString().split("T")[0],
         new Date().toISOString().split("T")[0],
+        1,
+        100,
+        "all",
       );
 
       return (result.sales || [])
