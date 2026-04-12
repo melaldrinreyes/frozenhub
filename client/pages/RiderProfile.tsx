@@ -126,24 +126,24 @@ export default function RiderProfile() {
   const completedCount = deliveryHistory.length;
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-slate-50 p-3 sm:p-6 lg:p-8">
       <div className="max-w-5xl mx-auto space-y-6">
-        <div className="rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 p-6 text-black shadow-lg">
-          <div className="flex items-center justify-between gap-3">
+        <div className="rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-500 p-4 sm:p-6 text-black shadow-lg">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0">
                 <Bike className="w-7 h-7" />
-                <h1 className="text-2xl sm:text-3xl font-bold">Rider Dashboard</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold leading-tight">Rider Dashboard</h1>
               </div>
-              <p className="mt-2 text-sm sm:text-base text-black/80">
+              <p className="mt-2 text-sm sm:text-base text-black/80 max-w-2xl">
                 Branch online deliveries for branch {user?.branch_id || "N/A"}
               </p>
             </div>
-            <Button onClick={handleLogout} className="bg-black text-white hover:bg-black/90">Logout</Button>
+            <Button onClick={handleLogout} className="w-full sm:w-auto bg-black text-white hover:bg-black/90">Logout</Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm">Ready for Delivery</CardTitle></CardHeader>
             <CardContent><div className="text-2xl font-bold">{readyCount}</div></CardContent>
@@ -171,9 +171,9 @@ export default function RiderProfile() {
         </div>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>Delivery Queue</CardTitle>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
               <Button size="sm" variant={selectedStatus === "ready" ? "default" : "outline"} onClick={() => setSelectedStatus("ready")}>Ready</Button>
               <Button size="sm" variant={selectedStatus === "picked_up" ? "default" : "outline"} onClick={() => setSelectedStatus("picked_up")}>Picked Up</Button>
               <Button size="sm" variant={selectedStatus === "completed" ? "default" : "outline"} onClick={() => setSelectedStatus("completed")}>Completed</Button>
@@ -187,13 +187,13 @@ export default function RiderProfile() {
             )}
 
             {filteredOrders.map((order: RiderOrder) => (
-              <div key={order.id} className="border rounded-lg p-4 space-y-3">
-                <div className="flex items-center justify-between">
+              <div key={order.id} className="border rounded-lg p-4 space-y-3 bg-white">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <div className="font-semibold">Order {order.id}</div>
+                    <div className="font-semibold break-all">Order {order.id}</div>
                     <div className="text-xs text-slate-500">{new Date(order.sale_date).toLocaleString()}</div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {order.status === "ready" ? (
                       <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Ready</Badge>
                     ) : order.status === "picked_up" || order.status === "out_for_delivery" ? (
@@ -250,14 +250,14 @@ export default function RiderProfile() {
 
             {deliveryHistory.map((order: DeliveryHistoryItem) => (
               <div key={order.id} className="border rounded-lg p-4 bg-slate-50/60">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                   <div>
-                    <div className="font-semibold">Order {order.sale_id}</div>
+                    <div className="font-semibold break-all">Order {order.sale_id}</div>
                     <div className="text-xs text-slate-500">
                       Delivered: {new Date(order.delivered_at).toLocaleString()}
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-left sm:text-right">
                     <div className="font-semibold">P{toNumber(order.total_amount).toFixed(2)}</div>
                     <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
                       {order.payment_status === "succeeded" ? "Payment succeeded" : "Completed"}

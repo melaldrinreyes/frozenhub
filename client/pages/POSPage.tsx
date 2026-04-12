@@ -648,15 +648,15 @@ export default function POSPage() {
       {/* Header */}
       <header className="bg-gradient-to-r from-black via-gray-900 to-black border-b border-gold-500/30 sticky top-0 z-30 shadow-lg">
         <div className="container mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
             {/* Logo */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <div className="relative">
                 <Snowflake className="w-6 h-6 sm:w-8 sm:h-8 text-gold-400" />
                 <div className="absolute inset-0 bg-gold-400/20 blur-lg rounded-full" />
               </div>
               <div>
-                <h1 className="text-base sm:text-xl lg:text-2xl font-bold text-gold-400">
+                <h1 className="text-base sm:text-xl lg:text-2xl font-bold text-gold-400 leading-tight">
                   Point of Sale
                 </h1>
                 <p className="text-xs text-gray-400 hidden sm:block">
@@ -666,10 +666,10 @@ export default function POSPage() {
             </div>
 
             {/* User Info & Clock */}
-            <div className="ml-auto flex items-center gap-2 sm:gap-4">
-              <div className="hidden md:flex flex-col items-end">
+            <div className="ml-auto flex flex-wrap items-center justify-between gap-2 sm:gap-4 w-full sm:w-auto sm:justify-end">
+              <div className="hidden md:flex flex-col items-end min-w-0">
                 <p className="text-xs text-gray-400">Operator</p>
-                <p className="text-sm font-medium text-gold-400">{user?.name}</p>
+                <p className="text-sm font-medium text-gold-400 truncate max-w-[12rem]">{user?.name}</p>
               </div>
               <div className="hidden sm:flex items-center gap-2 text-xs sm:text-sm text-gray-300 bg-black/40 px-3 py-2 rounded-lg border border-gold-500/20">
                 <Clock className="w-4 h-4 text-gold-400" />
@@ -679,10 +679,11 @@ export default function POSPage() {
                 onClick={handleLogout}
                 variant="outline"
                 size="sm"
-                className="border-gold-500/40 px-2 sm:px-3 text-gold-300 hover:bg-gold-500/15 hover:text-gold-200"
+                className="w-full sm:w-auto border-gold-500/40 px-3 text-gold-300 hover:bg-gold-500/15 hover:text-gold-200"
               >
                 <LogOut className="w-4 h-4 sm:mr-1" />
                 <span className="hidden sm:inline">Logout</span>
+                <span className="sm:hidden">Log out</span>
               </Button>
             </div>
           </div>
@@ -690,7 +691,7 @@ export default function POSPage() {
       </header>
 
       {/* Main Content */}
-      <div className="container mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 pb-32 sm:pb-36 md:pb-6">
+      <div className="container mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 pb-36 sm:pb-36 md:pb-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Products Section */}
           <div className="lg:col-span-2 space-y-4 sm:space-y-6">
@@ -709,7 +710,7 @@ export default function POSPage() {
                 </div>
 
                 {/* Categories */}
-                <div className="flex gap-2 overflow-x-auto whitespace-nowrap pb-1">
+                <div className="flex gap-2 overflow-x-auto whitespace-nowrap pb-1 -mx-1 px-1">
                   <button
                     onClick={() => setSelectedCategory(null)}
                     className={`shrink-0 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
@@ -752,7 +753,7 @@ export default function POSPage() {
                 return (
                   <Card
                     key={product.id}
-                    className="hover:shadow-lg transition-all hover:scale-[1.02] border-slate-200 relative"
+                    className="hover:shadow-lg transition-all hover:scale-[1.02] border-slate-200 relative overflow-hidden"
                   >
                     {hasPromo && (
                       <div className="absolute top-2 right-2 z-10">
@@ -794,7 +795,7 @@ export default function POSPage() {
                       <h3 className="font-semibold text-slate-900 text-xs sm:text-sm line-clamp-2 min-h-[2.5rem]">
                         {product.name}
                       </h3>
-                      <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center justify-between gap-2 mb-2">
                         <p className="text-[10px] sm:text-xs text-slate-600 font-medium">
                           <Package className="w-3 h-3 inline mr-1" />
                           <span className={product.stock < 10 && product.stock > 0 ? 'text-orange-600 font-bold' : product.stock === 0 ? 'text-red-600 font-bold' : 'text-green-600'}>{product.stock}</span>
@@ -829,7 +830,7 @@ export default function POSPage() {
                         <Button
                           onClick={() => addToCart(product)}
                           size="sm"
-                          className="w-full bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-600 hover:to-gold-700 text-black font-semibold shadow-sm"
+                          className="w-full min-h-11 bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-600 hover:to-gold-700 text-black font-semibold shadow-sm"
                           disabled={product.stock === 0}
                         >
                           <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
@@ -864,7 +865,7 @@ export default function POSPage() {
                   <span>Cart ({cart.length})</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-4 pb-24 md:pb-4 lg:overflow-y-auto lg:max-h-[calc(100vh-10rem)]">
+              <CardContent className="pt-4 pb-28 md:pb-4 lg:overflow-y-auto lg:max-h-[calc(100vh-10rem)]">
                 {cart.length === 0 ? (
                   <div className="text-center py-12">
                     <div className="w-16 h-16 mx-auto bg-gradient-to-br from-slate-100 to-slate-50 rounded-full flex items-center justify-center mb-4">
@@ -876,7 +877,7 @@ export default function POSPage() {
                 ) : (
                   <div className="space-y-4">
                     {/* Cart Items */}
-                    <div className="space-y-2 sm:space-y-3 max-h-60 lg:max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="space-y-2 sm:space-y-3 max-h-[36vh] sm:max-h-60 lg:max-h-[50vh] overflow-y-auto pr-1 sm:pr-2 custom-scrollbar">
                       {cart.map((item) => (
                         <div
                           key={item.id}
@@ -936,13 +937,13 @@ export default function POSPage() {
                           </div>
                           
                           {/* Bottom row: Quantity controls (mobile) / Right side (desktop) */}
-                          <div className="flex items-center justify-between sm:justify-end gap-2">
-                            <div className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 p-1">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
+                            <div className="flex items-center justify-between gap-2 bg-white rounded-lg border border-slate-200 p-1 w-full sm:w-auto">
                               <button
                                 onClick={() =>
                                   updateQuantity(item.id, item.quantity - 1)
                                 }
-                                className="p-1.5 hover:bg-slate-100 rounded transition-colors"
+                                className="p-2 hover:bg-slate-100 rounded transition-colors"
                                 aria-label="Decrease quantity"
                               >
                                 <Minus className="w-3.5 h-3.5 text-slate-600" />
@@ -954,13 +955,13 @@ export default function POSPage() {
                                 onClick={() =>
                                   updateQuantity(item.id, item.quantity + 1)
                                 }
-                                className="p-1.5 hover:bg-slate-100 rounded transition-colors"
+                                className="p-2 hover:bg-slate-100 rounded transition-colors"
                                 aria-label="Increase quantity"
                               >
                                 <Plus className="w-3.5 h-3.5 text-slate-600" />
                               </button>
                             </div>
-                            <div className="text-sm sm:text-base font-bold text-slate-900">
+                            <div className="text-sm sm:text-base font-bold text-slate-900 sm:min-w-[5rem] sm:text-right">
                               ₱{(item.price * item.quantity - item.discountAmount).toFixed(2)}
                             </div>
                             <button
@@ -977,14 +978,14 @@ export default function POSPage() {
 
                     {/* Totals */}
                     <div className="border-t border-slate-200 pt-3 sm:pt-4 space-y-2 sm:space-y-3">
-                      <div className="flex justify-between text-sm sm:text-base">
+                      <div className="flex justify-between gap-3 text-sm sm:text-base">
                         <span className="text-slate-600 font-medium">Subtotal:</span>
                         <span className="font-bold text-slate-900">
                           ₱{subtotal.toFixed(2)}
                         </span>
                       </div>
                       {totalDiscount > 0 && (
-                        <div className="flex justify-between text-sm sm:text-base">
+                        <div className="flex justify-between gap-3 text-sm sm:text-base">
                           <span className="text-green-600 font-medium flex items-center gap-1">
                             <Tag className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             Discounts:
@@ -996,7 +997,7 @@ export default function POSPage() {
                       )}
 
 
-                      <div className="flex justify-between text-base sm:text-lg font-bold bg-gradient-to-r from-gold-500/10 to-gold-600/10 p-3 sm:p-4 rounded-xl border-2 border-gold-500/30 shadow-sm">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-base sm:text-lg font-bold bg-gradient-to-r from-gold-500/10 to-gold-600/10 p-3 sm:p-4 rounded-xl border-2 border-gold-500/30 shadow-sm">
                         <span className="text-slate-900">Total:</span>
                         <span className="text-gold-600 text-lg sm:text-xl">
                           ₱{total.toFixed(2)}
@@ -1017,7 +1018,7 @@ export default function POSPage() {
                     <Button
                       onClick={() => setShowPayment(true)}
                       disabled={cart.length === 0}
-                      className="w-full bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-600 hover:to-gold-700 text-black font-bold py-5 sm:py-6 shadow-lg hover:shadow-xl transition-all text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full min-h-12 bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-600 hover:to-gold-700 text-black font-bold py-4 sm:py-6 shadow-lg hover:shadow-xl transition-all text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <CreditCard className="w-5 h-5 mr-2" />
                       Proceed to Payment
@@ -1028,7 +1029,7 @@ export default function POSPage() {
                       onClick={() => setCart([])}
                       variant="outline"
                       disabled={cart.length === 0}
-                      className="w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full min-h-12 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Trash2 className="w-4 h-4 mr-2" />
                       Clear Cart
@@ -1045,7 +1046,7 @@ export default function POSPage() {
                   <span>Recent History</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-4 space-y-2 max-h-72 overflow-y-auto">
+              <CardContent className="pt-4 space-y-2 max-h-72 overflow-y-auto pr-1">
                 {salesHistory.length === 0 ? (
                   <p className="text-sm text-slate-500">No transactions yet.</p>
                 ) : (
@@ -1118,26 +1119,26 @@ export default function POSPage() {
       {/* Multi-match product selection modal */}
       {multiMatchProducts && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-lg">
+          <Card className="w-full max-w-lg max-h-[90dvh] overflow-y-auto shadow-2xl">
             <CardHeader>
               <CardTitle>Multiple products matched</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-slate-600 mb-3">Multiple products match the scanned barcode. Choose which to add:</p>
-              <div className="space-y-2 max-h-64 overflow-auto">
+              <div className="space-y-2 max-h-64 overflow-auto pr-1">
                 {multiMatchProducts.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between p-2 border rounded">
+                  <div key={p.id} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-2 border rounded">
                     <div>
                       <div className="font-semibold">{p.name}</div>
                       <div className="text-xs text-slate-500">₱{p.price.toFixed(2)}</div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 w-full sm:w-auto">
                       <Button size="sm" onClick={() => addFromMulti(p)}>Add</Button>
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="mt-4 flex justify-end gap-2">
+              <div className="mt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
                 <Button variant="ghost" onClick={() => setMultiMatchProducts(null)}>Cancel</Button>
                 <Button onClick={addAllFromMulti}>Add All</Button>
               </div>
@@ -1156,7 +1157,7 @@ export default function POSPage() {
                 Select Payment Method
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6 pt-6">
+            <CardContent className="space-y-5 pt-5 sm:pt-6">
               <div className="bg-gradient-to-r from-gold-500/10 to-gold-600/10 p-4 rounded-xl border-2 border-gold-500/30">
                 <p className="text-xs sm:text-sm text-slate-600 mb-1">Total Amount</p>
                 <p className="text-2xl sm:text-3xl font-bold text-gold-600">
@@ -1238,7 +1239,7 @@ export default function POSPage() {
                 Gcash Payment
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6 pt-6">
+            <CardContent className="space-y-5 pt-5 sm:pt-6">
               <div className="bg-gradient-to-r from-blue-500/10 to-blue-600/10 p-4 rounded-xl border-2 border-blue-500/30">
                 <p className="text-xs sm:text-sm text-slate-600 mb-1">Total Amount</p>
                 <p className="text-2xl sm:text-3xl font-bold text-blue-600">
