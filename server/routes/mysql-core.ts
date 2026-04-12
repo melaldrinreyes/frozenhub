@@ -1229,10 +1229,34 @@ export const handleGetSalesMySQL: RequestHandler = async (req, res) => {
         parsedCustomerInfo = null;
       }
 
+      const normalizedSaleId = String(sale.id || "");
+      const matchedItems = itemsBySaleId.get(normalizedSaleId) || [];
+      const hasLegacySummary = Number(sale.items_count || 0) > 0 && Number(sale.total_amount || 0) > 0;
+
+      const items = matchedItems.length > 0
+        ? matchedItems
+        : hasLegacySummary
+          ? [
+              {
+                id: `legacy-${normalizedSaleId}`,
+                sale_id: normalizedSaleId,
+                product_id: null,
+                product_name: "Legacy order summary",
+                quantity: Number(sale.items_count || 0) || 1,
+                unit_price: Number(sale.total_amount || 0),
+                price: Number(sale.total_amount || 0),
+                total: Number(sale.total_amount || 0),
+                subtotal: Number(sale.total_amount || 0),
+                discount_amount: 0,
+                legacy: true,
+              },
+            ]
+          : [];
+
       return {
         ...sale,
         customer_info: parsedCustomerInfo,
-        items: itemsBySaleId.get(String(sale.id || "")) || [],
+        items,
       };
     });
 
