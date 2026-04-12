@@ -1413,15 +1413,19 @@ export const handleGetSalesStatsMySQL: RequestHandler = async (req, res) => {
     );
 
     const stats = (rows as any[])[0] || {};
+    const totalSales = Number(stats.totalSales ?? stats.totalsales ?? 0);
+    const totalRevenue = Number(stats.totalRevenue ?? stats.totalrevenue ?? 0);
+    const avgOrderValue = Number(stats.avgOrderValue ?? stats.avgordervalue ?? 0);
+
     res.json({
-      totalSales: Number(stats.totalSales || 0),
-      totalRevenue: Number(stats.totalRevenue || 0),
-      avgOrderValue: Number(stats.avgOrderValue || 0),
+      totalSales,
+      totalRevenue,
+      avgOrderValue,
       totalPurchases: 0,
       totalExpenses: 0,
       avgPurchaseValue: 0,
-      totalProfit: Number(stats.totalRevenue || 0),
-      profitMargin: Number(stats.totalRevenue || 0) > 0 ? 100 : 0,
+      totalProfit: totalRevenue,
+      profitMargin: totalRevenue > 0 ? 100 : 0,
       topProducts: [],
       branchBreakdown: [],
     });
