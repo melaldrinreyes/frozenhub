@@ -180,6 +180,7 @@ export default function AdminDashboard() {
       const params = new URLSearchParams({
         page: salesPage.toString(),
         limit: salesPerPage.toString(),
+        status: "all",
       });
       const response = await fetch(`/api/sales?${params}`);
       if (!response.ok) throw new Error('Failed to fetch recent sales');

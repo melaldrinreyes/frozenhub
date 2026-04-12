@@ -1077,7 +1077,7 @@ export const handleGetTransferLogsMySQL: RequestHandler = async (req, res) => {
 };
 
 export const handleGetSalesMySQL: RequestHandler = async (req, res) => {
-  const { branchId, startDate, endDate, page = 1, limit = 10 } = req.query;
+  const { branchId, startDate, endDate, page = 1, limit = 10, status } = req.query;
   const requesterRole = req.user?.role;
   let connection;
   try {
@@ -1109,8 +1109,14 @@ export const handleGetSalesMySQL: RequestHandler = async (req, res) => {
     const clauses: string[] = [];
     const params: any[] = [];
 
-    // Chart data should match the completed-order KPIs.
-    clauses.push("status = 'completed'");
+    const requestedStatus = String(status || "").toLowerCase();
+    const shouldLimitToCompleted = requestedStatus !== "all";
+
+    // Keep the default list aligned with completed-order KPIs unless the caller
+    // explicitly requests the full recent-sales feed for dashboard widgets.
+    if (shouldLimitToCompleted) {
+      clauses.push("status = 'completed'");
+    }
 
     // Branch-scoped users can only access their assigned branch.
     if (requesterRole === "rider") {

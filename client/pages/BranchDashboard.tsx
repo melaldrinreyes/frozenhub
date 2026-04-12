@@ -212,6 +212,7 @@ export default function BranchDashboard() {
         branchId: user.branch_id,
         page: '1',
         limit: '10',
+        status: 'all',
       });
       
       const response = await fetch(`/api/sales?${params}`);
