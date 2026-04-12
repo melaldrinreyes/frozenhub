@@ -177,14 +177,7 @@ export default function AdminDashboard() {
   const { data: recentSalesData, isLoading: isLoadingSales } = useQuery({
     queryKey: ["recent-sales-admin", salesPage],
     queryFn: async () => {
-      const params = new URLSearchParams({
-        page: salesPage.toString(),
-        limit: salesPerPage.toString(),
-        status: "all",
-      });
-      const response = await fetch(`/api/sales?${params}`);
-      if (!response.ok) throw new Error('Failed to fetch recent sales');
-      const result = await response.json();
+      const result = await apiClient.getSales(undefined, undefined, undefined, salesPage, salesPerPage, "all");
       const pagination = result?.pagination || {};
 
       return {

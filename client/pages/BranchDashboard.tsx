@@ -214,10 +214,8 @@ export default function BranchDashboard() {
         limit: '10',
         status: 'all',
       });
-      
-      const response = await fetch(`/api/sales?${params}`);
-      if (!response.ok) throw new Error("Failed to fetch recent sales");
-      const result = await response.json();
+
+      const result = await apiClient.getSales(user.branch_id, undefined, undefined, 1, 10, "all");
 
       // Normalize sale_date into a parsed Date on the client for consistent rendering
       if (result.sales && Array.isArray(result.sales)) {
