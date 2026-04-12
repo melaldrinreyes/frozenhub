@@ -1,6 +1,7 @@
 import { RequestHandler } from "express";
 import bcrypt from "bcryptjs";
 import { getConnection } from "../db";
+import { logActivity } from "./activity-logs";
 import fs from "fs";
 import path from "path";
 
@@ -216,6 +217,20 @@ export const handleCreateProductMySQL: RequestHandler = async (req, res) => {
     );
 
     const [rows] = await connection.query("SELECT * FROM products WHERE id = ? LIMIT 1", [id]);
+    const createdProduct = (rows as any[])[0];
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "CREATE_PRODUCT",
+      entityType: "product",
+      entityId: id,
+      entityName: createdProduct?.name || String(name),
+      description: `Product ${String(name)} created`,
+      metadata: { sku, barcode: safeBarcode, category, price: toNumber(price, 0) },
+      ipAddress: req.ip || null,
+      branchId: req.user?.branch_id || null,
+    });
     res.status(201).json({ product: (rows as any[])[0] });
   } catch (error: any) {
     console.error("MySQL create product error:", error);
@@ -290,6 +305,20 @@ export const handleUpdateProductMySQL: RequestHandler = async (req, res) => {
     }
 
     const [rows] = await connection.query("SELECT * FROM products WHERE id = ? LIMIT 1", [id]);
+    const updatedProduct = (rows as any[])[0];
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "UPDATE_PRODUCT",
+      entityType: "product",
+      entityId: id,
+      entityName: updatedProduct?.name || id,
+      description: `Product ${updatedProduct?.name || id} updated`,
+      metadata: { sku, barcode, category, price, cost, active },
+      ipAddress: req.ip || null,
+      branchId: req.user?.branch_id || null,
+    });
     res.json({ product: (rows as any[])[0] });
   } catch (error: any) {
     console.error("MySQL update product error:", error);
@@ -313,6 +342,19 @@ export const handleDeleteProductMySQL: RequestHandler = async (req, res) => {
       res.status(404).json({ error: "Product not found" });
       return;
     }
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "DELETE_PRODUCT",
+      entityType: "product",
+      entityId: id,
+      entityName: `Product #${id}`,
+      description: "Product deleted",
+      metadata: { product_id: id },
+      ipAddress: req.ip || null,
+      branchId: req.user?.branch_id || null,
+    });
     res.json({ message: "Product deleted successfully" });
   } catch (error) {
     console.error("MySQL delete product error:", error);
@@ -380,6 +422,20 @@ export const handleAddInventoryMySQL: RequestHandler = async (req, res) => {
       [productId, branchId]
     );
 
+    const inventoryRecord = (rows as any[])[0];
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "ADD_INVENTORY",
+      entityType: "inventory",
+      entityId: inventoryRecord?.id || null,
+      entityName: inventoryRecord?.product_name || productId,
+      description: `Inventory adjusted for ${inventoryRecord?.product_name || productId}`,
+      metadata: { product_id: productId, branch_id: branchId, quantity: Math.max(0, Math.floor(toNumber(quantity, 0))) },
+      ipAddress: req.ip || null,
+      branchId: String(branchId),
+    });
     res.status(201).json({ inventory: (rows as any[])[0] });
   } catch (error) {
     console.error("MySQL add inventory error:", error);
@@ -429,6 +485,20 @@ export const handleUpdateInventoryMySQL: RequestHandler = async (req, res) => {
       [id]
     );
 
+    const inventoryRecord = (rows as any[])[0];
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "UPDATE_INVENTORY",
+      entityType: "inventory",
+      entityId: inventoryRecord?.id || id,
+      entityName: inventoryRecord?.product_name || id,
+      description: `Inventory updated for ${inventoryRecord?.product_name || id}`,
+      metadata: { quantity, reorder_level: reorderLevel },
+      ipAddress: req.ip || null,
+      branchId: inventoryRecord?.branch_id || req.user?.branch_id || null,
+    });
     res.json({ inventory: (rows as any[])[0] });
   } catch (error) {
     console.error("MySQL update inventory error:", error);
@@ -448,6 +518,19 @@ export const handleDeleteInventoryMySQL: RequestHandler = async (req, res) => {
       res.status(404).json({ error: "Inventory item not found" });
       return;
     }
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "DELETE_INVENTORY",
+      entityType: "inventory",
+      entityId: id,
+      entityName: `Inventory #${id}`,
+      description: "Inventory item deleted",
+      metadata: { inventory_id: id },
+      ipAddress: req.ip || null,
+      branchId: req.user?.branch_id || null,
+    });
     res.json({ message: "Inventory item deleted successfully" });
   } catch (error) {
     console.error("MySQL delete inventory error:", error);
@@ -540,6 +623,26 @@ export const handleStockTransferMySQL: RequestHandler = async (req, res) => {
         notes || null,
       ]
     );
+
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "STOCK_TRANSFER",
+      entityType: "inventory",
+      entityId: logId,
+      entityName: product.name,
+      description: `Transferred ${transferQty} units of ${product.name}`,
+      metadata: {
+        product_id: productId,
+        from_branch_id: fromBranchId,
+        to_branch_id: toBranchId,
+        quantity: transferQty,
+        reason: reason || null,
+      },
+      ipAddress: req.ip || null,
+      branchId: String(fromBranchId),
+    });
 
     await connection.commit();
     res.json({ message: "Stock transfer completed", transferId: logId });
@@ -656,6 +759,20 @@ export const handleCreateBranchMySQL: RequestHandler = async (req, res) => {
     );
 
     const [rows] = await connection.query("SELECT *, TRUE as is_active FROM branches WHERE id = ? LIMIT 1", [id]);
+    const branch = (rows as any[])[0];
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "CREATE_BRANCH",
+      entityType: "branch",
+      entityId: id,
+      entityName: branch?.name || name,
+      description: `Branch ${branch?.name || name} created`,
+      metadata: { location, phone, manager },
+      ipAddress: req.ip || null,
+      branchId: id,
+    });
     res.status(201).json({ branch: (rows as any[])[0] });
   } catch (error) {
     console.error("MySQL create branch error:", error);
@@ -704,6 +821,20 @@ export const handleUpdateBranchMySQL: RequestHandler = async (req, res) => {
     }
 
     const [rows] = await connection.query("SELECT *, TRUE as is_active FROM branches WHERE id = ? LIMIT 1", [id]);
+    const branch = (rows as any[])[0];
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "UPDATE_BRANCH",
+      entityType: "branch",
+      entityId: id,
+      entityName: branch?.name || id,
+      description: `Branch ${branch?.name || id} updated`,
+      metadata: { name, location, phone, manager },
+      ipAddress: req.ip || null,
+      branchId: id,
+    });
     res.json({ branch: (rows as any[])[0] });
   } catch (error) {
     console.error("MySQL update branch error:", error);
@@ -718,11 +849,26 @@ export const handleDeleteBranchMySQL: RequestHandler = async (req, res) => {
   let connection;
   try {
     connection = await getConnection();
+    const [existingRows] = await connection.query("SELECT name FROM branches WHERE id = ? LIMIT 1", [id]);
+    const existingBranch = (existingRows as any[])[0];
     const [result] = await connection.query("DELETE FROM branches WHERE id = ?", [id]);
     if (Number((result as any)?.affectedRows || 0) === 0) {
       res.status(404).json({ error: "Branch not found" });
       return;
     }
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "DELETE_BRANCH",
+      entityType: "branch",
+      entityId: id,
+      entityName: existingBranch?.name || id,
+      description: `Branch ${existingBranch?.name || id} deleted`,
+      metadata: { branch_id: id },
+      ipAddress: req.ip || null,
+      branchId: id,
+    });
     res.json({ message: "Branch deleted successfully" });
   } catch (error: any) {
     console.error("MySQL delete branch error:", error);
@@ -824,6 +970,20 @@ export const handleCreateUserMySQL: RequestHandler = async (req, res) => {
       `SELECT id, name, email, phone, role, branch_id, created_at FROM users WHERE id = ? LIMIT 1`,
       [id]
     );
+    const createdUser = (rows as any[])[0];
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "CREATE_USER",
+      entityType: "user",
+      entityId: id,
+      entityName: createdUser?.name || name,
+      description: `User ${createdUser?.name || name} created`,
+      metadata: { email, phone, role: normalizedRole, branch_id: normalizedBranchId },
+      ipAddress: req.ip || null,
+      branchId: normalizedBranchId || null,
+    });
     res.status(201).json({ user: (rows as any[])[0] });
   } catch (error: any) {
     console.error("MySQL create user error:", error);
@@ -919,6 +1079,21 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
       [id]
     );
 
+    const updatedUser = (rows as any[])[0];
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "UPDATE_USER",
+      entityType: "user",
+      entityId: id,
+      entityName: updatedUser?.name || id,
+      description: `User ${updatedUser?.name || id} updated`,
+      metadata: { email, phone, role, branch_id: normalizedBranchId, password_changed: String(password || "").trim().length > 0 },
+      ipAddress: req.ip || null,
+      branchId: updatedUser?.branch_id || normalizedBranchId || null,
+    });
+
     res.json({ user: (rows as any[])[0] });
   } catch (error: any) {
     console.error("MySQL update user error:", error);
@@ -943,11 +1118,26 @@ export const handleDeleteUserMySQL: RequestHandler = async (req, res) => {
   let connection;
   try {
     connection = await getConnection();
+    const [existingRows] = await connection.query("SELECT name, branch_id, role FROM users WHERE id = ? LIMIT 1", [id]);
+    const existingUser = (existingRows as any[])[0];
     const [result] = await connection.query("DELETE FROM users WHERE id = ?", [id]);
     if (Number((result as any)?.affectedRows || 0) === 0) {
       res.status(404).json({ error: "User not found" });
       return;
     }
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "DELETE_USER",
+      entityType: "user",
+      entityId: id,
+      entityName: existingUser?.name || id,
+      description: `User ${existingUser?.name || id} deleted`,
+      metadata: { branch_id: existingUser?.branch_id || null, role: existingUser?.role || null },
+      ipAddress: req.ip || null,
+      branchId: existingUser?.branch_id || null,
+    });
     res.json({ message: "User deleted successfully" });
   } catch (error: any) {
     console.error("MySQL delete user error:", error);
@@ -1294,6 +1484,23 @@ export const handleUpdateOrderStatusMySQL: RequestHandler = async (req, res) => 
 
     await connection.commit();
 
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "UPDATE_ORDER_STATUS",
+      entityType: "sale",
+      entityId: id,
+      entityName: `Order #${id}`,
+      description: `Order status changed from ${currentStatus} to ${nextStatus}`,
+      metadata: {
+        previous_status: currentStatus,
+        next_status: nextStatus,
+      },
+      ipAddress: req.ip || null,
+      branchId: String(sale.branch_id || req.user?.branch_id || "") || null,
+    });
+
     res.json({ message: "Order status updated", status });
   } catch (error) {
     if (connection) {
@@ -1410,6 +1617,26 @@ export const handleCreateCustomerOrderMySQL: RequestHandler = async (req, res) =
     }
 
     await connection.commit();
+
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "CREATE_ORDER",
+      entityType: "sale",
+      entityId: saleId,
+      entityName: `Order #${saleId}`,
+      description: `Customer order created with ${itemCount} items totaling ₱${grandTotal.toFixed(2)}`,
+      metadata: {
+        items_count: itemCount,
+        subtotal,
+        total: grandTotal,
+        payment_method: normalizedPaymentMethod,
+      },
+      ipAddress: req.ip || null,
+      branchId: String(branchId),
+    });
+
     res.status(201).json({ message: "Order created successfully", orderId: saleId });
   } catch (error: any) {
     if (connection) {
@@ -1498,7 +1725,7 @@ export const handleCancelCustomerOrderMySQL: RequestHandler = async (req, res) =
     connection = await getConnection();
 
     const [orderRows] = await connection.query(
-      `SELECT id, status FROM sales WHERE id = ? LIMIT 1`,
+      `SELECT id, branch_id, status FROM sales WHERE id = ? LIMIT 1`,
       [orderId]
     );
     const order = (orderRows as any[])[0];
@@ -1547,6 +1774,22 @@ export const handleCancelCustomerOrderMySQL: RequestHandler = async (req, res) =
       res.status(404).json({ error: "Order not found or already cancelled" });
       return;
     }
+
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "CANCEL_ORDER",
+      entityType: "sale",
+      entityId: orderId,
+      entityName: `Order #${orderId}`,
+      description: "Customer order cancelled",
+      metadata: {
+        status: "cancelled",
+      },
+      ipAddress: req.ip || null,
+      branchId: String(order.branch_id || req.user?.branch_id || "") || null,
+    });
 
     res.json({ message: "Order cancelled successfully" });
   } catch (error: any) {
@@ -1813,6 +2056,19 @@ export const handleCreatePurchaseMySQL: RequestHandler = async (req, res) => {
     );
 
     await connection.commit();
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "CREATE_PURCHASE",
+      entityType: "purchase",
+      entityId: purchaseId,
+      entityName: `Purchase #${purchaseId}`,
+      description: `Purchase created with total ₱${totalAmount.toFixed(2)}`,
+      metadata: { supplierId: supplierId || null, branchId, invoiceNumber, status: status || "received", totalAmount },
+      ipAddress: req.ip || null,
+      branchId: String(branchId),
+    });
     res.status(201).json({ message: "Purchase created successfully", id: purchaseId });
   } catch (error: any) {
     if (connection) {
@@ -1913,6 +2169,19 @@ export const handleUpdatePurchaseMySQL: RequestHandler = async (req, res) => {
     );
 
     await connection.commit();
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "UPDATE_PURCHASE",
+      entityType: "purchase",
+      entityId: id,
+      entityName: `Purchase #${id}`,
+      description: `Purchase ${id} updated`,
+      metadata: { supplierId: supplierId || existing.supplier_id, branchId: branchId || existing.branch_id, invoiceNumber, status },
+      ipAddress: req.ip || null,
+      branchId: String(branchId || existing.branch_id),
+    });
     res.json({ message: "Purchase updated successfully" });
   } catch (error: any) {
     if (connection) {
@@ -1957,6 +2226,19 @@ export const handleDeletePurchaseMySQL: RequestHandler = async (req, res) => {
 
     await connection.query("DELETE FROM purchases WHERE id = ?", [id]);
     await connection.commit();
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "DELETE_PURCHASE",
+      entityType: "purchase",
+      entityId: id,
+      entityName: `Purchase #${id}`,
+      description: `Purchase ${id} deleted`,
+      metadata: { branchId: purchase.branch_id },
+      ipAddress: req.ip || null,
+      branchId: String(purchase.branch_id),
+    });
     res.json({ message: "Purchase deleted successfully" });
   } catch (error) {
     if (connection) {
@@ -2153,6 +2435,19 @@ export const handleCreateCategoryMySQL: RequestHandler = async (req, res) => {
     );
 
     const [rows] = await connection.query("SELECT * FROM categories WHERE id = ? LIMIT 1", [id]);
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "CREATE_CATEGORY",
+      entityType: "category",
+      entityId: id,
+      entityName: normalizedName,
+      description: `Category ${normalizedName} created`,
+      metadata: { description, active },
+      ipAddress: req.ip || null,
+      branchId: req.user?.branch_id || null,
+    });
     res.status(201).json({ category: (rows as any[])[0] });
   } catch (error: any) {
     console.error("MySQL create category error:", error);
@@ -2222,6 +2517,20 @@ export const handleUpdateCategoryMySQL: RequestHandler = async (req, res) => {
     }
 
     const [rows] = await connection.query("SELECT * FROM categories WHERE id = ? LIMIT 1", [id]);
+    const category = (rows as any[])[0];
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "UPDATE_CATEGORY",
+      entityType: "category",
+      entityId: id,
+      entityName: category?.name || id,
+      description: `Category ${category?.name || id} updated`,
+      metadata: { name, description, active },
+      ipAddress: req.ip || null,
+      branchId: req.user?.branch_id || null,
+    });
     res.json({ category: (rows as any[])[0] });
   } catch (error: any) {
     console.error("MySQL update category error:", error);
@@ -2245,6 +2554,19 @@ export const handleDeleteCategoryMySQL: RequestHandler = async (req, res) => {
       res.status(404).json({ error: "Category not found" });
       return;
     }
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "DELETE_CATEGORY",
+      entityType: "category",
+      entityId: id,
+      entityName: `Category #${id}`,
+      description: "Category deleted",
+      metadata: { category_id: id },
+      ipAddress: req.ip || null,
+      branchId: req.user?.branch_id || null,
+    });
     res.json({ message: "Category deleted successfully" });
   } catch (error) {
     console.error("MySQL delete category error:", error);
@@ -2281,6 +2603,20 @@ export const handleUpdateSettingMySQL: RequestHandler = async (req, res) => {
        LIMIT 1`,
       [key]
     );
+
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "UPDATE_SETTING",
+      entityType: "setting",
+      entityId: key,
+      entityName: key,
+      description: `Setting ${key} updated`,
+      metadata: { value },
+      ipAddress: req.ip || null,
+      branchId: null,
+    });
 
     res.json({ setting: (rows as any[])[0], message: "Setting updated successfully" });
   } catch (error) {
@@ -2319,6 +2655,20 @@ export const handleDeleteSettingMySQL: RequestHandler = async (req, res) => {
       res.status(404).json({ error: "Setting not found" });
       return;
     }
+
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "DELETE_SETTING",
+      entityType: "setting",
+      entityId: key,
+      entityName: key,
+      description: `Setting ${key} deleted`,
+      metadata: { key },
+      ipAddress: req.ip || null,
+      branchId: null,
+    });
     res.json({ message: "Setting deleted successfully" });
   } catch (error) {
     if (isDatabaseUnavailableError(error) && process.env.NODE_ENV !== "production") {

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { getConnection } from "../db";
 import { AuthUser } from "../middleware/auth";
 import { generateToken } from "../middleware/jwt";
+import { logActivity } from "./activity-logs";
 import fs from "fs";
 import path from "path";
 
@@ -194,6 +195,23 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
     req.session.user = authUser;
 
     const token = generateToken(authUser);
+
+    await logActivity(connection, {
+      userId: authUser.id,
+      userName: authUser.name,
+      userRole: authUser.role,
+      action: "USER_LOGIN",
+      entityType: "auth",
+      entityId: authUser.id,
+      entityName: authUser.name,
+      description: "User logged into the system",
+      metadata: {
+        login_method: "email",
+      },
+      ipAddress: req.ip || null,
+      branchId: authUser.branch_id || null,
+    });
+
     res.json({ user: authUser, token });
   } catch (error) {
     logSqlProviderError("Supabase/Postgres login error:", error);
@@ -209,6 +227,23 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
         req.session.user = authUser;
 
         const token = generateToken(authUser);
+
+        await logActivity(connection, {
+          userId: authUser.id,
+          userName: authUser.name,
+          userRole: authUser.role,
+          action: "USER_LOGIN",
+          entityType: "auth",
+          entityId: authUser.id,
+          entityName: authUser.name,
+          description: "User logged into the system using fallback credentials",
+          metadata: {
+            login_method: "fallback",
+          },
+          ipAddress: req.ip || null,
+          branchId: authUser.branch_id || null,
+        });
+
         console.warn("⚠ Supabase/Postgres is unreachable; using fallback login");
         res.json({ user: authUser, token });
         return;
@@ -221,6 +256,23 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
         req.session.user = authUser;
 
         const token = generateToken(authUser);
+
+        await logActivity(connection, {
+          userId: authUser.id,
+          userName: authUser.name,
+          userRole: authUser.role,
+          action: "USER_LOGIN",
+          entityType: "auth",
+          entityId: authUser.id,
+          entityName: authUser.name,
+          description: "Admin fallback login used while database is unreachable",
+          metadata: {
+            login_method: "fallback_admin",
+          },
+          ipAddress: req.ip || null,
+          branchId: null,
+        });
+
         console.warn("⚠ Supabase/Postgres is unreachable; using fallback admin login");
         res.json({ user: authUser, token });
         return;
@@ -277,6 +329,20 @@ export const handleSignupMySQL: RequestHandler = async (req, res) => {
     req.session.userId = userId;
     req.session.userRole = "customer";
     req.session.user = authUser;
+
+    await logActivity(connection, {
+      userId: authUser.id,
+      userName: authUser.name,
+      userRole: authUser.role,
+      action: "USER_SIGNUP",
+      entityType: "auth",
+      entityId: authUser.id,
+      entityName: authUser.name,
+      description: "Customer account created",
+      metadata: { email: authUser.email },
+      ipAddress: req.ip || null,
+      branchId: null,
+    });
 
     res.status(201).json({ user: authUser });
   } catch (error) {

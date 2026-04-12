@@ -317,6 +317,52 @@ class ApiClient {
     return this.request<{ logs: any[]; count: number }>(`/inventory/transfer-logs${query ? `?${query}` : ""}`);
   }
 
+  async getActivityLogs(filters?: {
+    userId?: string;
+    action?: string;
+    entityType?: string;
+    branchId?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const params = new URLSearchParams();
+    if (filters?.userId) params.append("userId", filters.userId);
+    if (filters?.action) params.append("action", filters.action);
+    if (filters?.entityType) params.append("entityType", filters.entityType);
+    if (filters?.branchId) params.append("branchId", filters.branchId);
+    if (filters?.search) params.append("search", filters.search);
+    if (filters?.startDate) params.append("startDate", filters.startDate);
+    if (filters?.endDate) params.append("endDate", filters.endDate);
+    if (filters?.page) params.append("page", filters.page.toString());
+    if (filters?.limit) params.append("limit", filters.limit.toString());
+    const query = params.toString();
+    return this.request<{ logs: any[]; pagination: { page: number; limit: number; total: number; pages: number } }>(`/activity-logs${query ? `?${query}` : ""}`);
+  }
+
+  async getActivityStats(filters?: {
+    branchId?: string;
+    startDate?: string;
+    endDate?: string;
+  }) {
+    const params = new URLSearchParams();
+    if (filters?.branchId) params.append("branchId", filters.branchId);
+    if (filters?.startDate) params.append("startDate", filters.startDate);
+    if (filters?.endDate) params.append("endDate", filters.endDate);
+    const query = params.toString();
+    return this.request<{ totalLogs: number; byAction: Record<string, number>; byEntityType: Record<string, number> }>(`/activity-logs/stats${query ? `?${query}` : ""}`);
+  }
+
+  async getRecentActivity(filters?: { branchId?: string; limit?: number }) {
+    const params = new URLSearchParams();
+    if (filters?.branchId) params.append("branchId", filters.branchId);
+    if (filters?.limit) params.append("limit", filters.limit.toString());
+    const query = params.toString();
+    return this.request<{ logs: any[] }>(`/activity-logs/recent${query ? `?${query}` : ""}`);
+  }
+
   async getProductAvailability(productId: string) {
     return this.request<{ 
       product_id: string;

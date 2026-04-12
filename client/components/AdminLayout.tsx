@@ -124,6 +124,7 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
     { label: "Branches", href: "/admin/branches", icon: Package },
     { label: "Users", href: "/admin/users", icon: Users },
     { label: "Transfer Logs", href: "/admin/transfer-logs", icon: FileText },
+    { label: "Audit Logs", href: "/admin/audit-logs", icon: FileText },
     { label: "CMS", href: "/admin/cms", icon: Layout },
     { label: "Settings", href: "/admin/settings", icon: Settings },
   ];
@@ -134,6 +135,7 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
     { label: "Inventory", href: "/branch/inventory", icon: ShoppingCart },
     { label: "Sales", href: "/branch/sales", icon: BarChart3 },
     { label: "Online Orders", href: "/branch/online-orders", icon: Globe },
+    { label: "Audit Logs", href: "/branch/audit-logs", icon: FileText },
     // { label: "POS Operators", href: "/branch/users", icon: Users }, // Removed as requested
     { label: "Settings", href: "/branch/settings", icon: Settings },
   ];

@@ -23,6 +23,7 @@ import AdminUsers from "./pages/AdminUsers";
 import AdminSettings from "./pages/AdminSettings";
 import AdminCMS from "./pages/AdminCMS";
 import AdminTransferLogs from "./pages/AdminTransferLogs";
+import AuditLogs from "./pages/AuditLogs";
 import BranchProducts from "./pages/BranchProducts";
 import BranchInventory from "./pages/BranchInventory";
 import BranchSales from "./pages/BranchSales";
@@ -141,6 +142,14 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/admin/audit-logs"
+              element={
+                <ProtectedRoute allowedRoles={["admin"]}>
+                  <AuditLogs />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Branch Admin Routes */}
             <Route
@@ -180,6 +189,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={["branch_admin"]}>
                   <BranchOnlineOrders />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/branch/audit-logs"
+              element={
+                <ProtectedRoute allowedRoles={["branch_admin"]}>
+                  <AuditLogs />
                 </ProtectedRoute>
               }
             />

@@ -554,6 +554,9 @@ export function createServer() {
   app.get("/api/activity-logs", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleGetActivityLogs);
   app.get("/api/activity-logs/stats", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleGetActivityStats);
   app.get("/api/activity-logs/recent", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleGetRecentActivity);
+  app.get("/api/audit-logs", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleGetActivityLogs);
+  app.get("/api/audit-logs/stats", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleGetActivityStats);
+  app.get("/api/audit-logs/recent", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleGetRecentActivity);
 
   // Serve static files in production only (not in serverless)
   // Note: isServerless is already defined earlier in the function
