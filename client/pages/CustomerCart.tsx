@@ -68,7 +68,7 @@ function normalizeCartItem(item: any): CartItem {
 
   return {
     id: item.id,
-      // Home,
+    name: item.name || item.product_name || "Unknown Product",
     price: typeof item.price === "string" ? parseFloat(item.price) : item.price,
     quantity: item.quantity || 1,
     image: item.image,

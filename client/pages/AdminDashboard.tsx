@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/apiClient";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -42,8 +42,6 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-
-const categoryData: { name: string; value: number }[] = [];
 
 const COLORS = ["#f59e0b", "#fbbf24", "#d97706", "#b45309"];
 
@@ -113,7 +111,8 @@ export default function AdminDashboard() {
   const [selectedSale, setSelectedSale] = useState<any>(null);
   const [showItemsDialog, setShowItemsDialog] = useState(false);
   const [salesPage, setSalesPage] = useState(1);
-  const [trendRange, setTrendRange] = useState<TrendRange>("all");
+  const [trendRange, setTrendRange] = useState<TrendRange>("30d");
+  const [trendBranchId, setTrendBranchId] = useState<string>("all");
   const [customTrendStartDate, setCustomTrendStartDate] = useState(() => {
     const date = new Date();
     date.setDate(date.getDate() - 6);
@@ -150,10 +149,10 @@ export default function AdminDashboard() {
 
   // Fetch sales trend data (all branches)
   const { data: salesTrendData, isLoading: isLoadingTrend } = useQuery({
-    queryKey: ["sales-trend-admin", trendDateRange.startDate, trendDateRange.endDate],
+    queryKey: ["sales-trend-admin", trendBranchId, trendDateRange.startDate, trendDateRange.endDate],
     queryFn: async () => {
       return apiClient.getSalesTrend(
-        undefined,
+        trendBranchId === "all" ? undefined : trendBranchId,
         trendDateRange.startDate,
         trendDateRange.endDate
       );
@@ -168,6 +167,12 @@ export default function AdminDashboard() {
       if (!response.ok) throw new Error('Failed to fetch inventory');
       return response.json();
     },
+  });
+
+  // Fetch products for category distribution chart
+  const { data: productsData, isLoading: isLoadingProducts } = useQuery({
+    queryKey: ["products-admin-dashboard"],
+    queryFn: () => apiClient.getProducts(),
   });
 
   // Fetch recent sales (all branches)
@@ -192,12 +197,40 @@ export default function AdminDashboard() {
     },
   });
 
-  const dashboardData = salesTrendData?.trend || [];
+  const dashboardData = (salesTrendData?.trend || []).map((entry: any) => ({
+    ...entry,
+    sales: Number(entry?.sales || 0),
+  }));
+
+  const categoryData = useMemo(() => {
+    const products = Array.isArray(productsData?.products) ? productsData.products : [];
+    const totalProductsCount = products.length;
+    if (totalProductsCount === 0) return [] as Array<{ name: string; value: number }>;
+
+    const categoryCounts = products.reduce((acc: Record<string, number>, product: any) => {
+      const categoryName = String(product?.category || "Uncategorized").trim() || "Uncategorized";
+      acc[categoryName] = (acc[categoryName] || 0) + 1;
+      return acc;
+    }, {});
+
+    return Object.entries(categoryCounts)
+      .map(([name, count]) => ({
+        name,
+        value: Math.round((count / totalProductsCount) * 100),
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [productsData]);
   const totalProducts = inventoryData?.inventory?.length || 0;
   const totalRevenue = salesStatsData?.totalRevenue || 0;
   const totalSales = salesStatsData?.totalSales || 0;
   const activeBranches = branchesData?.branches?.filter((b: any) => b.is_active)?.length || 0;
   const lowStockCount = inventoryData?.inventory?.filter((item: any) => item.quantity <= (item.reorder_level || 10))?.length || 0;
+
+  const selectedTrendBranchName = useMemo(() => {
+    if (trendBranchId === "all") return "All branches";
+    const branch = branchesData?.branches?.find((b: any) => String(b.id) === String(trendBranchId));
+    return branch?.name || branch?.branch_name || "Selected branch";
+  }, [trendBranchId, branchesData]);
 
   // Helper function to get branch name from branch_id
   const getBranchName = (branchId: string) => {
@@ -335,9 +368,24 @@ export default function AdminDashboard() {
               <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <CardTitle className="text-base sm:text-lg">Sales Trend - {trendDateRange.label}</CardTitle>
-                  <p className="text-xs text-slate-500 mt-1">All branches</p>
+                  <p className="text-xs text-slate-500 mt-1">{selectedTrendBranchName}</p>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <div className="w-full sm:w-52">
+                    <Select value={trendBranchId} onValueChange={setTrendBranchId}>
+                      <SelectTrigger className="h-10 bg-white">
+                        <SelectValue placeholder="Branch" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All branches</SelectItem>
+                        {(branchesData?.branches || []).map((branch: any) => (
+                          <SelectItem key={branch.id} value={String(branch.id)}>
+                            {branch.name || branch.branch_name || "Unnamed Branch"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="w-full sm:w-44">
                     <Select value={trendRange} onValueChange={(value) => setTrendRange(value as TrendRange)}>
                       <SelectTrigger className="h-10 bg-white">
@@ -417,26 +465,36 @@ export default function AdminDashboard() {
               <CardTitle className="text-base sm:text-lg">Product Categories</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={250} className="sm:h-[300px]">
-                <PieChart>
-                  <Pie
-                    data={categoryData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, value }) => `${name}: ${value}%`}
-                    outerRadius={70}
-                    fill="#8884d8"
-                    dataKey="value"
-                    style={{ fontSize: "11px" }}
-                  >
-                    {categoryData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index]} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ fontSize: "12px" }} />
-                </PieChart>
-              </ResponsiveContainer>
+              {isLoadingProducts ? (
+                <div className="flex items-center justify-center h-[250px] sm:h-[300px] text-slate-500">
+                  Loading category data...
+                </div>
+              ) : categoryData.length === 0 ? (
+                <div className="flex items-center justify-center h-[250px] sm:h-[300px] text-slate-500">
+                  No category data available
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={250} className="sm:h-[300px]">
+                  <PieChart>
+                    <Pie
+                      data={categoryData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, value }) => `${name}: ${value}%`}
+                      outerRadius={70}
+                      fill="#8884d8"
+                      dataKey="value"
+                      style={{ fontSize: "11px" }}
+                    >
+                      {categoryData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ fontSize: "12px" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
           </div>
