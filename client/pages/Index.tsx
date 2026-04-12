@@ -23,8 +23,6 @@ import {
 } from "lucide-react";
 import LoginModal from "@/components/LoginModal";
 import { apiClient } from "@/lib/apiClient";
-import { useAuth } from "@/lib/authContext";
-import { confirmLogout } from "@/lib/logout";
 import useEmblaCarousel from "embla-carousel-react";
 import { formatPromoDate, getPromoCountdown, getPromoStatus, formatPromoDescription, formatDiscountDisplay } from "@/lib/discountUtils";
 import { getTimeRemaining, formatDate } from "@/lib/dateUtils";
@@ -52,8 +50,6 @@ const adjustBrightness = (hex: string, percent: number) => {
 export default function Index() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [activeNavItem, setActiveNavItem] = useState("home");
-  const { user, isAuthenticated, logout } = useAuth();
-  const hasActiveSession = Boolean(isAuthenticated && user?.id);
   const heroSectionRef = useRef<HTMLElement | null>(null);
   const promoSectionRef = useRef<HTMLElement | null>(null);
   const featuredSectionRef = useRef<HTMLElement | null>(null);
@@ -88,11 +84,6 @@ export default function Index() {
   const scrollProductsNext = useCallback(() => {
     if (emblaProductsApi) emblaProductsApi.scrollNext();
   }, [emblaProductsApi]);
-
-  const handleLogout = async () => {
-    if (!(await confirmLogout())) return;
-    await logout();
-  };
 
   // Fetch hero banner setting
   const { data: bannerData } = useQuery({
@@ -580,23 +571,13 @@ export default function Index() {
 
             {/* Actions */}
             <div className="flex items-center gap-2 sm:gap-3">
-              {hasActiveSession ? (
-                <Button
-                  onClick={handleLogout}
-                  size="sm"
-                  className="bg-red-500/90 hover:bg-red-600 text-white font-medium px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
-                >
-                  <span>Logout</span>
-                </Button>
-              ) : (
-                <Button
-                  onClick={() => setShowLoginModal(true)}
-                  size="sm"
-                  className="bg-gold-500 hover:bg-gold-600 text-black font-medium px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
-                >
-                  <span>Login</span>
-                </Button>
-              )}
+              <Button
+                onClick={() => setShowLoginModal(true)}
+                size="sm"
+                className="bg-gold-500 hover:bg-gold-600 text-black font-medium px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
+              >
+                <span>Login</span>
+              </Button>
             </div>
           </div>
         </div>
