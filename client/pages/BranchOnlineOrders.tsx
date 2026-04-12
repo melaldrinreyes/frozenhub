@@ -175,17 +175,7 @@ export default function BranchOnlineOrders() {
   // Update order status mutation
   const updateStatusMutation = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
-      const response = await fetch(`/api/sales/${orderId}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      
-      if (!response.ok) {
-        throw new Error("Failed to update order status");
-      }
-      
-      return response.json();
+      return apiClient.updateOrderStatus(orderId, status);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["online-orders"] });
@@ -194,10 +184,10 @@ export default function BranchOnlineOrders() {
         description: "Order status updated successfully",
       });
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to update order status",
+        description: error?.message || "Failed to update order status",
         variant: "destructive",
       });
     },
@@ -630,7 +620,10 @@ export default function BranchOnlineOrders() {
                                 size="sm"
                                 className="w-full sm:w-auto"
                                 onClick={() => handleStatusChange(order.id, "ready")}
-                                disabled={updateStatusMutation.isPending}
+                                disabled={
+                                  updateStatusMutation.isPending ||
+                                  !(selectedRiders[order.id] || order.assigned_rider_id)
+                                }
                               >
                                 Mark as Ready
                               </Button>
