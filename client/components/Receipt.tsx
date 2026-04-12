@@ -44,22 +44,24 @@ const Receipt: React.FC<ReceiptProps> = ({ saleData, branchName, onClose, onPrin
   }, [onPrint]);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-white rounded-lg shadow-2xl max-w-md w-full max-h-[96dvh] sm:max-h-[90vh] flex flex-col">
         {/* Receipt Header */}
-        <div className="bg-gradient-to-r from-black via-gray-900 to-black text-white p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+        <div className="bg-gradient-to-r from-black via-gray-900 to-black text-white p-3 sm:p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <div className="w-8 h-8 bg-gold-400 rounded-full flex items-center justify-center">
                 <span className="text-black font-bold text-sm">B</span>
               </div>
-              <div>
-                <h2 className="text-lg font-bold">{branchName || saleData.branchName || "Branch"}</h2>
+              <div className="min-w-0">
+                <h2 className="text-base sm:text-lg font-bold truncate">{branchName || saleData.branchName || "Branch"}</h2>
                 <p className="text-xs text-gray-300">Point of Sale Receipt</p>
               </div>
             </div>
             <button
               onClick={onClose}
+              aria-label="Close receipt"
+              title="Close receipt"
               className="p-1 hover:bg-white/10 rounded transition-colors"
             >
               <X className="w-5 h-5" />
@@ -68,7 +70,7 @@ const Receipt: React.FC<ReceiptProps> = ({ saleData, branchName, onClose, onPrin
         </div>
 
         {/* Receipt Content */}
-        <div id="receipt-content" className="p-6 space-y-4 overflow-y-auto flex-1">
+        <div id="receipt-content" className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
           {/* Store Info */}
           <div className="text-center border-b border-gray-200 pb-4">
             <h3 className="font-bold text-lg">{branchName || saleData.branchName || "Branch"}</h3>
@@ -79,30 +81,30 @@ const Receipt: React.FC<ReceiptProps> = ({ saleData, branchName, onClose, onPrin
 
           {/* Sale Info */}
           <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-3">
               <span className="text-gray-600">Receipt #:</span>
-              <span className="font-mono font-semibold">{saleData.saleId}</span>
+              <span className="font-mono font-semibold text-right break-all">{saleData.saleId}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-3">
               <span className="text-gray-600">Date:</span>
               <span>{saleData.date.toLocaleDateString()}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-3">
               <span className="text-gray-600">Time:</span>
               <span>{saleData.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-3">
               <span className="text-gray-600">Operator:</span>
-              <span>{saleData.operator}</span>
+              <span className="text-right break-words">{saleData.operator}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-3">
               <span className="text-gray-600">Payment:</span>
               <span className="capitalize">{saleData.paymentMethod}</span>
             </div>
             {saleData.gcashReference && (
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-3">
                 <span className="text-gray-600">Ref #:</span>
-                <span className="font-mono text-xs">{saleData.gcashReference}</span>
+                <span className="font-mono text-xs text-right break-all">{saleData.gcashReference}</span>
               </div>
             )}
           </div>
@@ -121,7 +123,7 @@ const Receipt: React.FC<ReceiptProps> = ({ saleData, branchName, onClose, onPrin
           <div className="space-y-2">
             {saleData.items.map((item, index) => (
               <div key={item.id} className="grid grid-cols-12 gap-2 text-sm">
-                <div className="col-span-6 text-xs leading-tight">
+                <div className="col-span-6 text-xs leading-tight break-words">
                   {item.name}
                   {item.discountAmount > 0 && (
                     <div className="text-green-600 text-[10px]">
@@ -165,10 +167,10 @@ const Receipt: React.FC<ReceiptProps> = ({ saleData, branchName, onClose, onPrin
         </div>
 
         {/* Print Buttons */}
-        <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 space-y-2 sticky bottom-0 left-0 w-full z-10">
+        <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-gray-200 space-y-2 sticky bottom-0 left-0 w-full z-10">
           <button
             onClick={onPrint}
-            className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-all"
+            className="w-full min-h-11 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-all"
           >
             <Printer className="w-5 h-5" />
             Print Receipt
@@ -176,7 +178,7 @@ const Receipt: React.FC<ReceiptProps> = ({ saleData, branchName, onClose, onPrin
 
           <button
             onClick={() => onClose()}
-            className="w-full bg-white border border-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-all"
+            className="w-full min-h-11 bg-white border border-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-all"
           >
             <X className="w-5 h-5" />
             Cancel

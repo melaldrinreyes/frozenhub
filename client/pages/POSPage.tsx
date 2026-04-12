@@ -1056,7 +1056,7 @@ export default function POSPage() {
                       className="rounded-lg border border-slate-200 p-3 bg-white flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="min-w-0 w-full sm:w-auto">
-                        <p className="text-sm font-semibold text-slate-900 truncate">{sale.id}</p>
+                        <p className="text-sm font-semibold text-slate-900 truncate" title={sale.id}>{sale.id}</p>
                         <p className="text-xs text-slate-500">
                           {new Date(sale.sale_date || sale.date).toLocaleString()} • {sale.items_count || 0} item(s)
                         </p>
