@@ -141,7 +141,7 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
   const navigation = isSystemAdmin ? adminNavigation : branchNavigation;
 
   const handleLogout = async () => {
-    if (!confirmLogout()) return;
+    if (!(await confirmLogout())) return;
     await logout();
     navigate("/");
   };

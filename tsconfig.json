@@ -8,6 +8,7 @@
 
     /* Module resolution */
     "moduleResolution": "bundler",
+    "preserveSymlinks": true,
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
@@ -17,7 +18,6 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
-    "typeRoots": ["./node_modules/@types"],
     "types": ["node", "vite/client"],
 
     /* Linting */

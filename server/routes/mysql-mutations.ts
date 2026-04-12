@@ -1200,6 +1200,51 @@ export const handleUpdateOrderStatusMySQL: RequestHandler = async (req, res) => 
       }
     }
 
+    await connection.beginTransaction();
+
+    const isCompletingOnlineOrder =
+      nextStatus === "completed" &&
+      currentStatus !== "completed" &&
+      !!sale.customer_info;
+
+    if (isCompletingOnlineOrder) {
+      const [saleItemRows] = await connection.query(
+        `SELECT product_id, quantity
+         FROM sale_items
+         WHERE sale_id = ?`,
+        [id]
+      );
+
+      for (const saleItem of saleItemRows as any[]) {
+        const productId = String(saleItem.product_id || "");
+        const requiredQty = Math.max(0, Math.floor(toNumber(saleItem.quantity, 0)));
+        if (!productId || requiredQty <= 0) continue;
+
+        const [inventoryRows] = await connection.query(
+          `SELECT id, quantity
+           FROM inventory
+           WHERE branch_id = ? AND product_id = ?
+           LIMIT 1
+           FOR UPDATE`,
+          [sale.branch_id, productId]
+        );
+
+        const inventoryRecord = (inventoryRows as any[])[0];
+        const availableQty = Number(inventoryRecord?.quantity || 0);
+
+        if (!inventoryRecord || availableQty < requiredQty) {
+          throw new Error(`Insufficient inventory for product ${productId}`);
+        }
+
+        await connection.query(
+          `UPDATE inventory
+           SET quantity = quantity - ?, last_stock_check = NOW()
+           WHERE id = ?`,
+          [requiredQty, inventoryRecord.id]
+        );
+      }
+    }
+
     const successPaymentValue = hasPaymentStatus ? await getPaymentStatusValue(connection, "succeeded") : "succeeded";
     const failedPaymentValue = hasPaymentStatus ? await getPaymentStatusValue(connection, "failed") : "failed";
 
@@ -1247,9 +1292,22 @@ export const handleUpdateOrderStatusMySQL: RequestHandler = async (req, res) => 
       }
     }
 
+    await connection.commit();
+
     res.json({ message: "Order status updated", status });
   } catch (error) {
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch {
+        // ignore rollback failure
+      }
+    }
     console.error("MySQL update order status error:", error);
+    if (error instanceof Error && error.message.toLowerCase().includes("insufficient inventory")) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
     res.status(500).json({ error: "Failed to update order status" });
   } finally {
     connection?.release();

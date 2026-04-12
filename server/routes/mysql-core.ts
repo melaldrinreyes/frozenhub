@@ -913,6 +913,9 @@ export const handleGetTransferLogsMySQL: RequestHandler = async (req, res) => {
     const clauses: string[] = [];
     const params: any[] = [];
 
+    // Dashboard KPIs are labeled as completed orders only.
+    clauses.push("status = 'completed'");
+
     if (branchId) {
       clauses.push("(from_branch_id = ? OR to_branch_id = ?)");
       params.push(branchId, branchId);
@@ -985,6 +988,9 @@ export const handleGetSalesMySQL: RequestHandler = async (req, res) => {
 
     const clauses: string[] = [];
     const params: any[] = [];
+
+    // Chart data should match the completed-order KPIs.
+    clauses.push("status = 'completed'");
 
     // Branch-scoped users can only access their assigned branch.
     if (requesterRole === "rider") {

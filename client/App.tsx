@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/lib/authContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import LogoutConfirmHost from "@/components/LogoutConfirmHost";
 
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -42,6 +43,7 @@ const App = () => (
       <AuthProvider>
         <Toaster />
         <Sonner />
+        <LogoutConfirmHost />
         <BrowserRouter
           future={{
             v7_startTransition: true,

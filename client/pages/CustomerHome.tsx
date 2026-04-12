@@ -61,7 +61,7 @@ export default function CustomerHome() {
   }, [emblaApi]);
 
   const handleLogout = async () => {
-    if (!confirmLogout()) return;
+    if (!(await confirmLogout())) return;
     await logout();
     navigate("/");
   };

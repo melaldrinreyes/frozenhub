@@ -303,9 +303,9 @@ export default function CustomerShop() {
 
   const categories = Array.from(new Set(products.map((p) => p.category)));
 
-  const handleLogout = () => {
-    if (!confirmLogout()) return;
-    logout();
+  const handleLogout = async () => {
+    if (!(await confirmLogout())) return;
+    await logout();
     navigate("/");
   };
 

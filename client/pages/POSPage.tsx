@@ -421,7 +421,7 @@ export default function POSPage() {
   const salesHistory = salesHistoryData?.sales || [];
 
   const handleLogout = async () => {
-    if (!confirmLogout()) return;
+    if (!(await confirmLogout())) return;
     await logout();
     navigate("/");
   };

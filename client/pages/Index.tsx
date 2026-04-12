@@ -91,7 +91,7 @@ export default function Index() {
   }, [emblaProductsApi]);
 
   const handleLogout = async () => {
-    if (!confirmLogout()) return;
+    if (!(await confirmLogout())) return;
     await logout();
   };
 

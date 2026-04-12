@@ -54,7 +54,7 @@ export default function RiderProfile() {
   };
 
   const handleLogout = async () => {
-    if (!confirmLogout()) return;
+    if (!(await confirmLogout())) return;
     await logout();
     navigate("/");
   };
