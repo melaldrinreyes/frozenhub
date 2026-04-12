@@ -142,20 +142,20 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
             <nav className="hidden md:flex items-center gap-8">
               <button
                 onClick={() => navigate("/customer/shop")}
-                className={`text-sm font-medium transition-colors ${
+                className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
                   isActive("/customer/shop")
-                    ? "text-gold-400"
-                    : "text-gray-300 hover:text-gold-400"
+                    ? "bg-gold-500/15 text-gold-300 shadow-sm"
+                    : "text-gray-300 hover:bg-white/5 hover:text-gold-300"
                 }`}
               >
                 Shop
               </button>
               <button
                 onClick={() => navigate("/customer/orders")}
-                className={`text-sm font-medium transition-colors relative ${
+                className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
                   isActive("/customer/orders")
-                    ? "text-gold-400"
-                    : "text-gray-300 hover:text-gold-400"
+                    ? "bg-gold-500/15 text-gold-300 shadow-sm"
+                    : "text-gray-300 hover:bg-white/5 hover:text-gold-300"
                 }`}
               >
                 Orders
@@ -170,10 +170,10 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
               </button>
               <button
                 onClick={() => navigate("/customer/cart")}
-                className={`text-sm font-medium transition-colors relative ${
+                className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
                   isActive("/customer/cart")
-                    ? "text-gold-400"
-                    : "text-gray-300 hover:text-gold-400"
+                    ? "bg-gold-500/15 text-gold-300 shadow-sm"
+                    : "text-gray-300 hover:bg-white/5 hover:text-gold-300"
                 }`}
               >
                 Cart
@@ -192,7 +192,7 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
             <div className="flex items-center gap-3">
               <button
                 onClick={handleLogout}
-                className="hidden md:flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/90 hover:bg-red-600 text-white font-medium shadow-md hover:shadow-lg transition-all duration-200"
+                className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-medium shadow-md hover:shadow-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
               >
                 <span>Logout</span>
               </button>
@@ -205,15 +205,15 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
       <main className="pb-20 md:pb-6">{children}</main>
 
       {/* Bottom Navigation - Mobile Only */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-black border-t border-gold-500/20 z-50 shadow-lg">
-        <div className="grid grid-cols-4 h-16">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 px-3 pb-3">
+        <div className="grid grid-cols-4 h-16 rounded-2xl border border-gold-500/20 bg-black/92 backdrop-blur-xl shadow-[0_-12px_30px_rgba(0,0,0,0.35)] overflow-hidden">
 
           <button
             onClick={() => navigate("/customer/shop")}
-            className={`flex flex-col items-center justify-center gap-1 transition-all ${
+            className={`flex flex-col items-center justify-center gap-1 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-400/70 ${
               isActive("/customer/shop")
-                ? "text-gold-400 bg-gold-500/10"
-                : "text-gray-400 hover:text-gold-400 hover:bg-gold-500/5"
+                ? "text-gold-300 bg-gold-500/15"
+                : "text-gray-400 hover:text-gold-300 hover:bg-white/5"
             }`}
           >
             <ShoppingBag className="w-5 h-5" />
@@ -222,10 +222,10 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
 
           <button
             onClick={() => navigate("/customer/orders")}
-            className={`flex flex-col items-center justify-center gap-1 transition-all relative ${
+            className={`flex flex-col items-center justify-center gap-1 transition-all duration-200 relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-400/70 ${
               isActive("/customer/orders")
-                ? "text-gold-400 bg-gold-500/10"
-                : "text-gray-400 hover:text-gold-400 hover:bg-gold-500/5"
+                ? "text-gold-300 bg-gold-500/15"
+                : "text-gray-400 hover:text-gold-300 hover:bg-white/5"
             }`}
           >
             <div className="relative">
@@ -244,10 +244,10 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
 
           <button
             onClick={() => navigate("/customer/cart")}
-            className={`flex flex-col items-center justify-center gap-1 transition-all relative ${
+            className={`flex flex-col items-center justify-center gap-1 transition-all duration-200 relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-400/70 ${
               isActive("/customer/cart")
-                ? "text-gold-400 bg-gold-500/10"
-                : "text-gray-400 hover:text-gold-400 hover:bg-gold-500/5"
+                ? "text-gold-300 bg-gold-500/15"
+                : "text-gray-400 hover:text-gold-300 hover:bg-white/5"
             }`}
           >
             <div className="relative">
@@ -266,7 +266,7 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
 
           <button
             onClick={handleLogout}
-            className="flex flex-col items-center justify-center gap-1 transition-all text-red-400 hover:text-red-300 hover:bg-red-500/10"
+            className="flex flex-col items-center justify-center gap-1 transition-all text-red-400 hover:text-red-300 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-300/70"
           >
             <span className="text-xs font-medium">Logout</span>
           </button>
