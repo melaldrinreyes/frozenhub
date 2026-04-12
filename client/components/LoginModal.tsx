@@ -36,6 +36,7 @@ export default function LoginModal({ onClose }: LoginModalProps) {
   const navigate = useNavigate();
   const { login, signup, googleSignup } = useAuth();
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+  const isGoogleConfigured = Boolean(googleClientId);
 
   // Sign-in form
   const [signInData, setSignInData] = useState({
@@ -185,6 +186,12 @@ export default function LoginModal({ onClose }: LoginModalProps) {
     };
   }, [googleClientId, googleSignup, navigate, onClose]);
 
+  const handleGoogleFallbackClick = () => {
+    setError(
+      "Google sign-in is not configured yet. Set VITE_GOOGLE_CLIENT_ID on the client and GOOGLE_CLIENT_ID on the server."
+    );
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <Card className="w-full max-w-md">
@@ -239,17 +246,31 @@ export default function LoginModal({ onClose }: LoginModalProps) {
 
           <div className="text-xs uppercase text-slate-500 text-center">Continue with email</div>
 
-          {googleClientId && (
-            <div className="space-y-2">
-              <div ref={googleButtonRef} className="flex justify-center" />
-              <p className="text-xs text-center text-slate-500">
-                Google sign-in creates or opens a customer account automatically.
+          <div className="space-y-2">
+            {isGoogleConfigured ? (
+              <div ref={googleButtonRef} className="flex justify-center min-h-[44px]" />
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleGoogleFallbackClick}
+                className="w-full justify-center gap-2 border-slate-300 bg-white hover:bg-slate-50"
+              >
+                Continue with Google
+              </Button>
+            )}
+            <p className="text-xs text-center text-slate-500">
+              Google sign-in creates or opens a customer account automatically.
+            </p>
+            {!isGoogleConfigured && (
+              <p className="text-xs text-center text-amber-600">
+                Google sign-in is not configured in this environment yet.
               </p>
-              {googleLoading && (
-                <p className="text-xs text-center text-slate-500">Signing in with Google...</p>
-              )}
-            </div>
-          )}
+            )}
+            {googleLoading && (
+              <p className="text-xs text-center text-slate-500">Signing in with Google...</p>
+            )}
+          </div>
 
           {/* Error Message */}
           {error && (
