@@ -1,35 +1,93 @@
-GOOGLE SIGN-IN / SIGN-UP FOR CUSTOMER ACCOUNTS
+═══════════════════════════════════════════════════════════════════════════
+   GOOGLE OAUTH AUTHENTICATION - SETUP REQUIRED
 ═══════════════════════════════════════════════════════════════════════════
 
-This app uses Google Identity Services to create or sign in customer accounts.
-No redirect callback is required.
+The code is ready! You just need to set up Google Cloud credentials.
 
-What to configure
+QUICK SETUP (5 minutes):
+═══════════════════════════════════════════════════════════════════════════
+
+STEP 1: Create Google Cloud Project
 ───────────────────────────────────────────────────────────────────────────
-1. Create an OAuth client in Google Cloud Console.
-2. Use application type: Web application.
-3. Add these authorized JavaScript origins:
-   - http://localhost:8080
-   - https://frozenhub-pos.vercel.app
-4. Copy the OAuth client ID.
+1. Visit: https://console.cloud.google.com/
+2. Click "New Project"
+3. Name: "Fromax POS"
+4. Click "Create"
 
-Environment variables
+STEP 2: Enable Google+ API
 ───────────────────────────────────────────────────────────────────────────
-Set the same client ID in both places:
+1. Go to: APIs & Services → Library
+2. Search: "Google+ API"
+3. Click "Enable"
 
-- VITE_GOOGLE_CLIENT_ID
-- GOOGLE_CLIENT_ID
-
-Behavior
+STEP 3: Configure OAuth Consent Screen
 ───────────────────────────────────────────────────────────────────────────
-- Clicking "Continue with Google" creates a new customer account if the email is new.
-- If the email already belongs to a customer account, it signs the user in.
-- If the email belongs to admin/branch/rider/pos roles, the sign-in is rejected.
-- Password is not required for Google-created customer accounts.
+1. Go to: APIs & Services → OAuth consent screen
+2. Choose: "External"
+3. Fill in:
+   - App name: Fromax POS
+   - User support email: (your email)
+   - Developer contact: (your email)
+4. Click "Save and Continue" through all steps
 
-Notes
+STEP 4: Create OAuth Credentials
 ───────────────────────────────────────────────────────────────────────────
-- The server verifies Google ID tokens before creating or signing in the account.
-- The customer role is enforced server-side.
-- You do not need a Google client secret for this flow.
+1. Go to: APIs & Services → Credentials
+2. Click: "+ CREATE CREDENTIALS" → "OAuth client ID"
+3. Application type: "Web application"
+4. Name: "Fromax POS Web"
+
+5. Authorized JavaScript origins:
+   https://fromax.netlify.app
+   http://localhost:8080
+
+6. Authorized redirect URIs:
+   https://fromax.netlify.app/api/auth/google/callback
+   http://localhost:8080/api/auth/google/callback
+
+7. Click "Create"
+
+STEP 5: Get Your Credentials
+───────────────────────────────────────────────────────────────────────────
+You'll see a popup with:
+- Client ID: 123456789-abc123.apps.googleusercontent.com
+- Client Secret: GOCSPX-abc123xyz
+
+Copy both values!
+
+STEP 6: Add to Netlify
+───────────────────────────────────────────────────────────────────────────
+Run these commands (replace with your actual values):
+
+netlify env:set GOOGLE_CLIENT_ID "PASTE_YOUR_CLIENT_ID_HERE" --context production --context deploy-preview --context dev
+
+netlify env:set GOOGLE_CLIENT_SECRET "PASTE_YOUR_CLIENT_SECRET_HERE" --context production --context deploy-preview --context dev
+
+STEP 7: Deploy
+───────────────────────────────────────────────────────────────────────────
+netlify deploy --prod
+
+DONE! ✓
+═══════════════════════════════════════════════════════════════════════════
+
+What's Already Set Up:
+✅ ENABLE_GOOGLE_OAUTH = true
+✅ GOOGLE_CALLBACK_URL = https://fromax.netlify.app/api/auth/google/callback
+✅ Google Sign-In button in login modal
+✅ Backend OAuth handlers ready
+✅ User account creation/linking logic
+
+What You Need to Add:
+⚠️  GOOGLE_CLIENT_ID (from Step 5)
+⚠️  GOOGLE_CLIENT_SECRET (from Step 5)
+
+After Setup, Users Can:
+• Click "Continue with Google" on login page
+• Sign in with their Google account
+• New users automatically get a customer account
+• Existing users can link their Google account
+• No password needed for Google users
+
+═══════════════════════════════════════════════════════════════════════════
+Need help? Check: https://console.cloud.google.com/
 ═══════════════════════════════════════════════════════════════════════════

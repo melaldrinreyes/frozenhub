@@ -12,6 +12,7 @@ import LogoutConfirmHost from "@/components/LogoutConfirmHost";
 
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import AuthCallback from "./pages/AuthCallback";
 import AdminDashboard from "./pages/AdminDashboard";
 import BranchDashboard from "./pages/BranchDashboard";
 import AdminCatalogs from "./pages/AdminCatalogs";
@@ -56,6 +57,7 @@ const App = () => (
               path="/"
               element={<Index />}
             />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/deals" element={<Navigate to="/" replace />} />
             <Route path="/shop" element={<Navigate to="/" replace />} />
             <Route path="*" element={<NotFound />} />

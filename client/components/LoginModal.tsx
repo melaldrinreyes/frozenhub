@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/authContext";
+import { signInWithGoogle } from "@/lib/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,32 +12,13 @@ interface LoginModalProps {
   onClose: () => void;
 }
 
-declare global {
-  interface Window {
-    google?: {
-      accounts?: {
-        id?: {
-          initialize: (config: {
-            client_id: string;
-            callback: (response: { credential?: string }) => void;
-          }) => void;
-          renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
-        };
-      };
-    };
-  }
-}
 
 export default function LoginModal({ onClose }: LoginModalProps) {
   const [tab, setTab] = useState<"signin" | "signup">("signin");
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
-  const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
-  const { login, signup, googleSignup } = useAuth();
-  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
-  const isGoogleConfigured = Boolean(googleClientId);
+  const { login, signup } = useAuth();
 
   // Sign-in form
   const [signInData, setSignInData] = useState({
@@ -52,6 +34,19 @@ export default function LoginModal({ onClose }: LoginModalProps) {
     password: "",
     confirmPassword: "",
   });
+
+  const handleGoogleSignIn = async () => {
+    setError("");
+    try {
+      await signInWithGoogle();
+      navigate("/customer/shop");
+      onClose();
+    } catch (err: any) {
+      const errorMessage = err?.message || "Google sign-in failed. Please try again.";
+      setError(errorMessage);
+      console.error("Google sign-in error:", err);
+    }
+  };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,76 +117,6 @@ export default function LoginModal({ onClose }: LoginModalProps) {
     }
   };
 
-  useEffect(() => {
-    if (!googleClientId || !googleButtonRef.current) return;
-
-    let cancelled = false;
-
-    const renderGoogleButton = () => {
-      if (cancelled || !googleButtonRef.current || !window.google?.accounts?.id) return;
-
-      googleButtonRef.current.innerHTML = "";
-      window.google.accounts.id.initialize({
-        client_id: googleClientId,
-        callback: async (response) => {
-          const credential = response.credential;
-          if (!credential) {
-            setError("Google sign-in failed. Please try again.");
-            return;
-          }
-
-          setError("");
-          setGoogleLoading(true);
-          try {
-            const user = await googleSignup(credential);
-            if (user) {
-              navigate("/customer/shop");
-              onClose();
-            }
-          } catch (err: any) {
-            const errorMessage = err?.message || "Google sign-in failed. Please try again.";
-            setError(errorMessage);
-          } finally {
-            setGoogleLoading(false);
-          }
-        },
-      });
-
-      window.google.accounts.id.renderButton(googleButtonRef.current, {
-        theme: "outline",
-        size: "large",
-        shape: "pill",
-        text: "continue_with",
-        width: 352,
-      });
-    };
-
-    const existingScript = document.querySelector<HTMLScriptElement>("script[data-google-identity='true']");
-    if (window.google?.accounts?.id) {
-      renderGoogleButton();
-    } else if (!existingScript) {
-      const script = document.createElement("script");
-      script.src = "https://accounts.google.com/gsi/client";
-      script.async = true;
-      script.defer = true;
-      script.dataset.googleIdentity = "true";
-      script.onload = () => renderGoogleButton();
-      document.head.appendChild(script);
-    } else {
-      existingScript.addEventListener("load", renderGoogleButton, { once: true });
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [googleClientId, googleSignup, navigate, onClose]);
-
-  const handleGoogleFallbackClick = () => {
-    setError(
-      "Google sign-in is not configured yet. Set VITE_GOOGLE_CLIENT_ID on the client and GOOGLE_CLIENT_ID on the server."
-    );
-  };
-
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <Card className="w-full max-w-md">
@@ -247,29 +172,17 @@ export default function LoginModal({ onClose }: LoginModalProps) {
           <div className="text-xs uppercase text-slate-500 text-center">Continue with email</div>
 
           <div className="space-y-2">
-            {isGoogleConfigured ? (
-              <div ref={googleButtonRef} className="flex justify-center min-h-[44px]" />
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleGoogleFallbackClick}
-                className="w-full justify-center gap-2 border-slate-300 bg-white hover:bg-slate-50"
-              >
-                Continue with Google
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleGoogleSignIn}
+              className="w-full justify-center gap-2 border-slate-300 bg-white hover:bg-slate-50"
+            >
+              Continue with Google
+            </Button>
             <p className="text-xs text-center text-slate-500">
               Google sign-in creates or opens a customer account automatically.
             </p>
-            {!isGoogleConfigured && (
-              <p className="text-xs text-center text-amber-600">
-                Google sign-in is not configured in this environment yet.
-              </p>
-            )}
-            {googleLoading && (
-              <p className="text-xs text-center text-slate-500">Signing in with Google...</p>
-            )}
           </div>
 
           {/* Error Message */}

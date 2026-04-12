@@ -507,6 +507,39 @@ export default function Index() {
     promo.discount_value && promo.discount_value > 0
   );
 
+  // Barcode scanner states
+  const [barcode, setBarcode] = useState(""); // State to store the scanned barcode
+  const [productDetails, setProductDetails] = useState(null); // State to store fetched product details
+
+  // Function to handle barcode input
+  const handleBarcodeInput = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const scannedBarcode = event.target.value;
+    setBarcode(scannedBarcode);
+
+    if (scannedBarcode) {
+      try {
+        const response = await apiClient.getProductByBarcode(scannedBarcode);
+        setProductDetails(response.product);
+      } catch (error) {
+        console.error("Error fetching product details:", error);
+        setProductDetails(null);
+      }
+    }
+  };
+
+  // Render product details if available
+  const renderProductDetails = () => {
+    if (!productDetails) return null;
+
+    return (
+      <div className="product-details">
+        <h3>Product Name: {productDetails.name}</h3>
+        <p>Price: ${productDetails.price}</p>
+        <p>Description: {productDetails.description}</p>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
@@ -1174,6 +1207,56 @@ export default function Index() {
       {showLoginModal && (
         <LoginModal onClose={() => setShowLoginModal(false)} />
       )}
+
+      {/* Barcode Scanner Section - For testing and demo */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 sm:p-6 shadow-md">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center gap-4">
+          <input
+            type="text"
+            placeholder="Scan barcode here"
+            value={barcode}
+            onChange={handleBarcodeInput}
+            className="barcode-input flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+          />
+          <Button
+            onClick={async () => {
+              if (barcode) {
+                try {
+                  const response = await apiClient.getProductByBarcode(barcode);
+                  // support different response shapes: { product: ... } or { data: ... }
+                  const product = (response as any).product ?? (response as any).data ?? null;
+                  setProductDetails(product);
+                } catch (error) {
+                  console.error("Error fetching product details:", error);
+                  setProductDetails(null);
+                }
+              }
+            }}
+            className="bg-gold-500 hover:bg-gold-600 text-black font-semibold px-4 py-2 rounded-lg shadow-md"
+          >
+            Search Product
+          </Button>
+        </div>
+
+        {/* Render Product Details Below Scanner */}
+        {productDetails && (
+          <div className="mt-4 p-4 bg-gray-50 rounded-lg shadow-md">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">{productDetails.name}</h3>
+            <p className="text-sm text-gray-600 mb-1">Price: <span className="font-semibold text-gray-900">₱{productDetails.price}</span></p>
+            <p className="text-sm text-gray-600 mb-1">Description: {productDetails.description}</p>
+            <div className="flex flex-wrap gap-2 mt-2">
+              <Badge className="bg-green-500 text-white text-xs rounded-full px-3 py-1">
+                In Stock
+              </Badge>
+              {productDetails.discount_amount > 0 && (
+                <Badge className="bg-red-500 text-white text-xs rounded-full px-3 py-1">
+                  Discount: {productDetails.discount_amount}%
+                </Badge>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

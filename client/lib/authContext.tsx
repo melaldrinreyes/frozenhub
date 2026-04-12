@@ -27,7 +27,6 @@ interface AuthContextType {
     phone: string,
     password: string,
   ) => Promise<AuthUser | null>;
-  googleSignup: (credential: string) => Promise<AuthUser | null>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
 }
@@ -88,17 +87,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const googleSignup = async (credential: string): Promise<AuthUser | null> => {
-    try {
-      const response = await apiClient.googleSignup(credential);
-      setUser(response.user);
-      return response.user;
-    } catch (error) {
-      console.error("Google signup error:", error);
-      throw error;
-    }
-  };
-
   const logout = async () => {
     try {
       await apiClient.logout();
@@ -116,7 +104,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         login,
         signup,
-        googleSignup,
         logout,
         isAuthenticated: !!user,
       }}

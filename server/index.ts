@@ -35,6 +35,7 @@ import {
   handleLogout, 
   handleGetMe,
 } from "./routes/auth";
+import { handleSupabaseCallback } from "./routes/supabase-auth";
 import {
   handleGetProducts,
   handleGetProduct,
@@ -138,7 +139,6 @@ import {
 import {
   handleLoginMySQL,
   handleSignupMySQL,
-  handleGoogleAuthMySQL,
   handleGetProductsMySQL,
   handleGetProductMySQL,
   handleGetBranchesMySQL,
@@ -444,7 +444,7 @@ export function createServer() {
   // Auth routes with specific rate limiters and timing attack prevention
   app.post("/api/auth/login", loginRateLimiter, preventTimingAttacks, runtimeDataProvider === "supabase" ? handleLoginMySQL : handleLogin);
   app.post("/api/auth/signup", signupRateLimiter, preventTimingAttacks, runtimeDataProvider === "supabase" ? handleSignupMySQL : handleSignup);
-  app.post("/api/auth/google", signupRateLimiter, preventTimingAttacks, runtimeDataProvider === "supabase" ? handleGoogleAuthMySQL : handleGoogleAuthMySQL);
+  app.post("/api/auth/supabase-callback", handleSupabaseCallback);
   app.post("/api/auth/logout", handleLogout);
   app.get("/api/auth/me", handleGetMe);
   
@@ -521,14 +521,14 @@ export function createServer() {
   // Settings routes (public read access with lenient rate limit)
   app.get("/api/settings", publicRateLimiter, runtimeDataProvider === "supabase" ? handleGetSettingsMySQL : handleGetSettings);
   app.get("/api/settings/:key", publicRateLimiter, runtimeDataProvider === "supabase" ? handleGetSettingMySQL : handleGetSetting);
-  app.put("/api/settings/:key", strictRateLimiter, runtimeDataProvider === "supabase" ? handleUpdateSettingMySQL : handleUpdateSetting);
-  app.delete("/api/settings/:key", strictRateLimiter, runtimeDataProvider === "supabase" ? handleDeleteSettingMySQL : handleDeleteSetting);
+  app.put("/api/settings/:key", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleUpdateSettingMySQL : handleUpdateSetting);
+  app.delete("/api/settings/:key", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleDeleteSettingMySQL : handleDeleteSetting);
 
   // Upload routes (strict rate limiting for file uploads)
   app.post("/api/upload/product-image", strictRateLimiter, upload.single("image"), handleUploadProductImage);
   app.delete("/api/upload/product-image", requireAuth, requireRole("admin"), strictRateLimiter, handleDeleteProductImage);
-  app.post("/api/upload/banner", strictRateLimiter, uploadBanner.single("image"), handleUploadBanner);
-  app.delete("/api/upload/banner", strictRateLimiter, handleDeleteBanner);
+  app.post("/api/upload/banner", requireAuth, requireRole("admin"), strictRateLimiter, uploadBanner.single("image"), handleUploadBanner);
+  app.delete("/api/upload/banner", requireAuth, requireRole("admin"), strictRateLimiter, handleDeleteBanner);
 
   // Promo routes (active promos is public, others admin only)
   app.get("/api/promos/active", publicRateLimiter, runtimeDataProvider === "supabase" ? getActivePromosMySQL : getActivePromos);
