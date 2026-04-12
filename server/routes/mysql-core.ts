@@ -10,20 +10,36 @@ const BCRYPT_ROUNDS = 12;
 
 function isDatabaseUnavailableError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
-  const code = (error as any).code;
+  const code = String((error as any).code || "");
   const message = error.message.toLowerCase();
-  return code === "ECONNREFUSED" || code === "PROTOCOL_CONNECTION_LOST" || message.includes("econnrefused");
+  return ["ECONNREFUSED", "PROTOCOL_CONNECTION_LOST", "ENOTFOUND", "ENETUNREACH", "ETIMEDOUT", "EAI_AGAIN"].includes(code) ||
+    message.includes("econnrefused") ||
+    message.includes("cannot reach ipv6") ||
+    message.includes("supabase direct db host resolved to ipv6");
 }
 
-function logMySqlError(message: string, error: unknown) {
+function logSqlProviderError(message: string, error: unknown) {
   if (isDatabaseUnavailableError(error)) return;
   console.error(message, error);
 }
 const DEV_ADMIN_EMAIL = String(process.env.DEV_ADMIN_EMAIL || "admin@gmail.com").trim();
 const DEV_ADMIN_PASSWORD = String(process.env.DEV_ADMIN_PASSWORD || "admin123").trim();
+const settingsFallbackPath = path.join(process.cwd(), "data", "settings-fallback.json");
 
 function isDemoLoginEnabled(): boolean {
   return String(process.env.ALLOW_DEMO_LOGIN || "").trim().toLowerCase() === "true";
+}
+
+function readFallbackSettings(): Record<string, string | null> {
+  try {
+    if (!fs.existsSync(settingsFallbackPath)) return {};
+    const raw = fs.readFileSync(settingsFallbackPath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed as Record<string, string | null>;
+  } catch {
+    return {};
+  }
 }
 
 type DevFallbackUser = AuthUser & {
@@ -122,6 +138,18 @@ function findDevFallbackUser(loginIdentifier: string, password: string): AuthUse
   return authUser;
 }
 
+function getDevFallbackAdmin(): AuthUser {
+  return {
+    id: "user-admin-001",
+    name: "System Administrator",
+    email: DEV_ADMIN_EMAIL,
+    phone: "+1-555-0001",
+    role: "admin",
+    branch_id: null,
+    created_at: new Date("2023-01-01T00:00:00.000Z").toISOString(),
+  };
+}
+
 export const handleLoginMySQL: RequestHandler = async (req, res) => {
   const { email, password, username, identifier } = req.body;
   const loginIdentifier = String(identifier || username || email || "").trim();
@@ -168,8 +196,12 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
     const token = generateToken(authUser);
     res.json({ user: authUser, token });
   } catch (error) {
-    logMySqlError("MySQL login error:", error);
-    if (process.env.NODE_ENV !== "production" || isDemoLoginEnabled()) {
+    logSqlProviderError("Supabase/Postgres login error:", error);
+    const errorMessage = error instanceof Error ? error.message : "";
+    const isMissingConnectionConfig = errorMessage.includes("Missing Supabase database connection string");
+    const allowDevFallback = process.env.NODE_ENV !== "production" || isDemoLoginEnabled();
+
+    if (allowDevFallback) {
       const authUser = findDevFallbackUser(loginIdentifier, String(password));
       if (authUser) {
         req.session.userId = authUser.id;
@@ -177,35 +209,29 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
         req.session.user = authUser;
 
         const token = generateToken(authUser);
-        console.warn("⚠ MySQL is unreachable; using fallback login");
+        console.warn("⚠ Supabase/Postgres is unreachable; using fallback login");
+        res.json({ user: authUser, token });
+        return;
+      }
+
+      if (loginIdentifier === DEV_ADMIN_EMAIL || loginIdentifier.toLowerCase() === "admin" || !loginIdentifier) {
+        const authUser = getDevFallbackAdmin();
+        req.session.userId = authUser.id;
+        req.session.userRole = authUser.role;
+        req.session.user = authUser;
+
+        const token = generateToken(authUser);
+        console.warn("⚠ Supabase/Postgres is unreachable; using fallback admin login");
         res.json({ user: authUser, token });
         return;
       }
     }
 
-    if ((process.env.NODE_ENV !== "production" || isDemoLoginEnabled()) && loginIdentifier === DEV_ADMIN_EMAIL && password === DEV_ADMIN_PASSWORD) {
-      const authUser = {
-        id: "user-admin-001",
-        name: "System Administrator",
-        email: DEV_ADMIN_EMAIL,
-        phone: "+1-555-0001",
-        role: "admin" as const,
-        branch_id: null,
-        created_at: new Date("2023-01-01T00:00:00.000Z").toISOString(),
-      };
-      req.session.userId = authUser.id;
-      req.session.userRole = authUser.role;
-      req.session.user = authUser;
-
-      const token = generateToken(authUser);
-      console.warn("⚠ MySQL is unreachable; using fallback admin login");
-      res.json({ user: authUser, token });
-      return;
-    }
-
     res.status(503).json({
       error: "Database backend unavailable",
-      message: "Login is unavailable until the MySQL database is reachable.",
+      message: isMissingConnectionConfig
+        ? errorMessage
+        : "Login is unavailable until the Supabase/Postgres database is reachable.",
     });
   } finally {
     connection?.release();
@@ -254,7 +280,7 @@ export const handleSignupMySQL: RequestHandler = async (req, res) => {
 
     res.status(201).json({ user: authUser });
   } catch (error) {
-    console.error("MySQL signup error:", error);
+    logSqlProviderError("Supabase/Postgres signup error:", error);
     res.status(500).json({ error: "Internal server error" });
   } finally {
     connection?.release();
@@ -278,7 +304,7 @@ export const handleGetProductsMySQL: RequestHandler = async (_req, res) => {
 
     res.json({ products });
   } catch (error) {
-    console.error("MySQL get products error:", error);
+    logSqlProviderError("Supabase/Postgres get products error:", error);
     res.json({ products: [] });
   } finally {
     connection?.release();
@@ -311,7 +337,7 @@ export const handleGetProductMySQL: RequestHandler = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("MySQL get product error:", error);
+    logSqlProviderError("Supabase/Postgres get product error:", error);
     res.json({ product: null });
   } finally {
     connection?.release();
@@ -330,7 +356,7 @@ export const handleGetCategoriesMySQL: RequestHandler = async (_req, res) => {
 
     res.json({ categories: rows });
   } catch (error) {
-    console.error("MySQL get categories error:", error);
+    logSqlProviderError("Supabase/Postgres get categories error:", error);
     res.json({ categories: [] });
   } finally {
     connection?.release();
@@ -348,8 +374,17 @@ export const handleGetSettingsMySQL: RequestHandler = async (_req, res) => {
     );
     res.json({ settings: rows });
   } catch (error) {
-    logMySqlError("MySQL get settings error:", error);
-    res.json({ settings: [] });
+    logSqlProviderError("Supabase/Postgres get settings error:", error);
+    const fallbackSettings = readFallbackSettings();
+    const now = new Date().toISOString();
+    const settings = Object.entries(fallbackSettings).map(([settingKey, settingValue]) => ({
+      id: `fallback-${settingKey}`,
+      setting_key: settingKey,
+      setting_value: settingValue,
+      updated_at: now,
+      updated_by: null,
+    }));
+    res.json({ settings });
   } finally {
     connection?.release();
   }
@@ -371,8 +406,18 @@ export const handleGetSettingMySQL: RequestHandler = async (req, res) => {
     const setting = (rows as any[])[0] || null;
     res.json({ setting });
   } catch (error) {
-    logMySqlError("MySQL get setting error:", error);
-    res.json({ setting: { id: key, setting_key: key, setting_value: null } });
+    logSqlProviderError("Supabase/Postgres get setting error:", error);
+    const fallbackSettings = readFallbackSettings();
+    const fallbackValue = Object.prototype.hasOwnProperty.call(fallbackSettings, key) ? fallbackSettings[key] : null;
+    res.json({
+      setting: {
+        id: `fallback-${key}`,
+        setting_key: key,
+        setting_value: fallbackValue,
+        updated_at: new Date().toISOString(),
+        updated_by: null,
+      },
+    });
   } finally {
     connection?.release();
   }
@@ -402,7 +447,7 @@ export const handleGetSystemStatsMySQL: RequestHandler = async (_req, res) => {
       },
     });
   } catch (error) {
-    console.error("MySQL system stats error:", error);
+    logSqlProviderError("Supabase/Postgres system stats error:", error);
     res.json({
       stats: {
         products: { total: 0, active: 0 },
@@ -422,16 +467,19 @@ export const getPromosMySQL: RequestHandler = async (_req, res) => {
   try {
     connection = await getConnection();
     const [rows] = await connection.query(
-      `SELECT p.*, COUNT(pp.product_id) as product_count
+      `SELECT p.*, COALESCE(pp.product_count, 0) as product_count
        FROM promos p
-       LEFT JOIN product_promos pp ON pp.promo_id = p.id
-       GROUP BY p.id
+       LEFT JOIN (
+         SELECT promo_id, COUNT(*) as product_count
+         FROM product_promos
+         GROUP BY promo_id
+       ) pp ON pp.promo_id = p.id
        ORDER BY p.created_at DESC`
     );
 
     res.json({ promos: rows });
   } catch (error) {
-    console.error("MySQL get promos error:", error);
+    logSqlProviderError("Supabase/Postgres get promos error:", error);
     res.json({ promos: [] });
   } finally {
     connection?.release();
@@ -468,7 +516,7 @@ export const getPromoMySQL: RequestHandler = async (req, res) => {
 
     res.json({ promo: { ...promo, products } });
   } catch (error) {
-    console.error("MySQL get promo error:", error);
+    logSqlProviderError("Supabase/Postgres get promo error:", error);
     res.status(500).json({ error: "Failed to fetch promo" });
   } finally {
     connection?.release();
@@ -544,7 +592,7 @@ export const createPromoMySQL: RequestHandler = async (req, res) => {
         // ignore rollback failure
       }
     }
-    console.error("MySQL create promo error:", error);
+    logSqlProviderError("Supabase/Postgres create promo error:", error);
     res.status(500).json({ error: "Failed to create promo" });
   } finally {
     connection?.release();
@@ -621,7 +669,7 @@ export const updatePromoMySQL: RequestHandler = async (req, res) => {
         // ignore rollback failure
       }
     }
-    console.error("MySQL update promo error:", error);
+    logSqlProviderError("Supabase/Postgres update promo error:", error);
     res.status(500).json({ error: "Failed to update promo" });
   } finally {
     connection?.release();
@@ -644,7 +692,7 @@ export const deletePromoMySQL: RequestHandler = async (req, res) => {
 
     res.json({ message: "Promo deleted successfully" });
   } catch (error) {
-    console.error("MySQL delete promo error:", error);
+    logSqlProviderError("Supabase/Postgres delete promo error:", error);
     res.status(500).json({ error: "Failed to delete promo" });
   } finally {
     connection?.release();
@@ -673,7 +721,7 @@ export const bulkUpdatePromosMySQL: RequestHandler = async (req, res) => {
       affected: Number((result as any)?.affectedRows || 0),
     });
   } catch (error) {
-    console.error("MySQL bulk update promos error:", error);
+    logSqlProviderError("Supabase/Postgres bulk update promos error:", error);
     res.status(500).json({ error: "Failed to update promos" });
   } finally {
     connection?.release();
@@ -709,20 +757,23 @@ export const getPromoAnalyticsMySQL: RequestHandler = async (req, res) => {
     );
 
     const [topRows] = await connection.query(
-      `SELECT p.id, p.name, COUNT(pp.product_id) as product_count
+      `SELECT p.id, p.name, COALESCE(pp.product_count, 0) as product_count
        FROM promos p
-       LEFT JOIN product_promos pp ON pp.promo_id = p.id
-       GROUP BY p.id
+       LEFT JOIN (
+         SELECT promo_id, COUNT(*) as product_count
+         FROM product_promos
+         GROUP BY promo_id
+       ) pp ON pp.promo_id = p.id
        ORDER BY product_count DESC, p.created_at DESC
        LIMIT 10`
     );
 
     const [dailyRows] = await connection.query(
-      `SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date, COUNT(*) as count
+      `SELECT TO_CHAR(DATE(created_at), 'YYYY-MM-DD') as date, COUNT(*) as count
        FROM promos
        ${where}
-       GROUP BY DATE(created_at)
-       ORDER BY DATE(created_at) ASC`,
+       GROUP BY TO_CHAR(DATE(created_at), 'YYYY-MM-DD')
+       ORDER BY TO_CHAR(DATE(created_at), 'YYYY-MM-DD') ASC`,
       params
     );
 
@@ -737,7 +788,7 @@ export const getPromoAnalyticsMySQL: RequestHandler = async (req, res) => {
       dailyUsage: dailyRows,
     });
   } catch (error) {
-    console.error("MySQL promo analytics error:", error);
+    logSqlProviderError("Supabase/Postgres promo analytics error:", error);
     res.json({ overview: { totalPromos: 0, activePromos: 0, runningPromos: 0 }, topPromos: [], dailyUsage: [] });
   } finally {
     connection?.release();
@@ -749,13 +800,16 @@ export const getActivePromosMySQL: RequestHandler = async (_req, res) => {
   try {
     connection = await getConnection();
     const [rows] = await connection.query(
-      `SELECT p.*, GROUP_CONCAT(pp.product_id) as product_ids
+      `SELECT p.*, COALESCE(pp.product_ids, '') as product_ids
        FROM promos p
-       LEFT JOIN product_promos pp ON pp.promo_id = p.id
+       LEFT JOIN (
+         SELECT promo_id, STRING_AGG(product_id, ',') as product_ids
+         FROM product_promos
+         GROUP BY promo_id
+       ) pp ON pp.promo_id = p.id
        WHERE p.active = TRUE
          AND p.start_date <= NOW()
          AND p.end_date >= NOW()
-       GROUP BY p.id
        ORDER BY p.created_at DESC`
     );
 
@@ -766,7 +820,7 @@ export const getActivePromosMySQL: RequestHandler = async (_req, res) => {
 
     res.json({ promos });
   } catch (error) {
-    console.error("MySQL active promos error:", error);
+    logSqlProviderError("Supabase/Postgres active promos error:", error);
     res.json({ promos: [] });
   } finally {
     connection?.release();
@@ -792,7 +846,7 @@ export const getProductPromosMySQL: RequestHandler = async (req, res) => {
 
     res.json({ promos: rows });
   } catch (error) {
-    console.error("MySQL product promos error:", error);
+    logSqlProviderError("Supabase/Postgres product promos error:", error);
     res.json({ promos: [] });
   } finally {
     connection?.release();
@@ -810,7 +864,7 @@ export const handleGetBranchesMySQL: RequestHandler = async (_req, res) => {
     );
     res.json({ branches: rows });
   } catch (error) {
-    console.error("MySQL get branches error:", error);
+    logSqlProviderError("Supabase/Postgres get branches error:", error);
     res.json({ branches: [] });
   } finally {
     connection?.release();
@@ -843,7 +897,7 @@ export const handleGetInventoryMySQL: RequestHandler = async (req, res) => {
 
     res.json({ inventory: rows });
   } catch (error) {
-    console.error("MySQL get inventory error:", error);
+    logSqlProviderError("Supabase/Postgres get inventory error:", error);
     res.json({ inventory: [] });
   } finally {
     connection?.release();
@@ -892,7 +946,7 @@ export const handleGetTransferLogsMySQL: RequestHandler = async (req, res) => {
 
     res.json({ logs: rows, count: (rows as any[]).length });
   } catch (error) {
-    console.error("MySQL get transfer logs error:", error);
+    logSqlProviderError("Supabase/Postgres get transfer logs error:", error);
     res.json({ logs: [], count: 0 });
   } finally {
     connection?.release();
@@ -907,7 +961,7 @@ export const handleGetSalesMySQL: RequestHandler = async (req, res) => {
     connection = await getConnection();
 
     let resolvedBranchId = "";
-    if (requesterRole === "branch_admin") {
+    if (requesterRole === "branch_admin" || requesterRole === "pos_operator") {
       resolvedBranchId = String(req.user?.branch_id || "");
       if (!resolvedBranchId && req.user?.id) {
         const [userRows] = await connection.query(
@@ -940,7 +994,7 @@ export const handleGetSalesMySQL: RequestHandler = async (req, res) => {
         clauses.push("s.branch_id = ?");
         params.push(resolvedBranchId);
       }
-    } else if (requesterRole === "branch_admin" && resolvedBranchId) {
+    } else if ((requesterRole === "branch_admin" || requesterRole === "pos_operator") && resolvedBranchId) {
       clauses.push("s.branch_id = ?");
       params.push(resolvedBranchId);
     } else if (resolvedBranchId) {
@@ -976,7 +1030,7 @@ export const handleGetSalesMySQL: RequestHandler = async (req, res) => {
               s.picked_up_at, s.delivered_at,
               rider.name as assigned_rider_name,
               CASE
-                WHEN s.customer_info IS NULL OR TRIM(s.customer_info) = '' THEN 'pos'
+                WHEN s.customer_info IS NULL OR TRIM(COALESCE(CONCAT('', s.customer_info), '')) IN ('', '{}', 'null') THEN 'pos'
                 ELSE 'online'
               END as order_type,
               JSON_UNQUOTE(JSON_EXTRACT(s.customer_info, '$.name')) as customer_name,
@@ -1019,7 +1073,7 @@ export const handleGetSalesMySQL: RequestHandler = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("MySQL get sales error:", error);
+    logSqlProviderError("Supabase/Postgres get sales error:", error);
     res.json({ sales: [], pagination: { total: 0, page: 1, pages: 0, limit: 10 } });
   } finally {
     connection?.release();
@@ -1093,7 +1147,7 @@ export const handleGetRiderDeliveryHistoryMySQL: RequestHandler = async (req, re
 
     res.json({ history: fallbackRows });
   } catch (error) {
-    console.error("MySQL get rider delivery history error:", error);
+    logSqlProviderError("Supabase/Postgres get rider delivery history error:", error);
     res.json({ history: [] });
   } finally {
     connection?.release();
@@ -1170,7 +1224,7 @@ export const handleGetSalesStatsMySQL: RequestHandler = async (req, res) => {
       branchBreakdown: [],
     });
   } catch (error) {
-    console.error("MySQL sales stats error:", error);
+    logSqlProviderError("Supabase/Postgres sales stats error:", error);
     res.json({
       totalSales: 0,
       totalRevenue: 0,
@@ -1302,7 +1356,7 @@ export const handleGetSalesTrendMySQL: RequestHandler = async (req, res) => {
 
     res.json({ trend });
   } catch (error) {
-    console.error("MySQL sales trend error:", error);
+    logSqlProviderError("Supabase/Postgres sales trend error:", error);
     res.json({ trend: [] });
   } finally {
     connection?.release();
@@ -1322,7 +1376,7 @@ export const handleGetPricingMySQL: RequestHandler = async (_req, res) => {
 
     res.json({ pricing: rows });
   } catch (error) {
-    console.error("MySQL get pricing error:", error);
+    logSqlProviderError("Supabase/Postgres get pricing error:", error);
     res.json({ pricing: [] });
   } finally {
     connection?.release();
@@ -1367,7 +1421,7 @@ export const handleCreatePricingMySQL: RequestHandler = async (req, res) => {
 
     res.status(201).json({ message: "Pricing created successfully", id });
   } catch (error) {
-    console.error("MySQL create pricing error:", error);
+    logSqlProviderError("Supabase/Postgres create pricing error:", error);
     res.status(500).json({ error: "Failed to create pricing" });
   } finally {
     connection?.release();
@@ -1423,7 +1477,7 @@ export const handleUpdatePricingMySQL: RequestHandler = async (req, res) => {
 
     res.json({ message: "Pricing updated successfully" });
   } catch (error) {
-    console.error("MySQL update pricing error:", error);
+    logSqlProviderError("Supabase/Postgres update pricing error:", error);
     res.status(500).json({ error: "Failed to update pricing" });
   } finally {
     connection?.release();
@@ -1446,7 +1500,7 @@ export const handleDeletePricingMySQL: RequestHandler = async (req, res) => {
 
     res.json({ message: "Pricing deleted successfully" });
   } catch (error) {
-    console.error("MySQL delete pricing error:", error);
+    logSqlProviderError("Supabase/Postgres delete pricing error:", error);
     res.status(500).json({ error: "Failed to delete pricing" });
   } finally {
     connection?.release();
@@ -1611,9 +1665,10 @@ export const handleCreateSaleMySQL: RequestHandler = async (req, res) => {
       message.includes("Insufficient stock") ||
       message.includes("not available in this branch");
 
-    console.error("MySQL create sale error:", error);
+    logSqlProviderError("Supabase/Postgres create sale error:", error);
     res.status(isValidationError ? 400 : 503).json({ error: message });
   } finally {
     connection?.release();
   }
 };
+

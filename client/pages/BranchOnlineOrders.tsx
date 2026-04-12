@@ -491,6 +491,13 @@ export default function BranchOnlineOrders() {
                             <div className="text-sm">{order.items_count} item(s)</div>
                           </div>
                         </div>
+                        <div className="flex items-start gap-2">
+                          <User className="h-4 w-4 mt-1 text-muted-foreground" />
+                          <div>
+                            <div className="text-sm font-medium">Assigned Rider</div>
+                            <div className="text-sm">{order.assigned_rider_name || "Unassigned"}</div>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Notes */}
@@ -683,7 +690,9 @@ export default function BranchOnlineOrders() {
                           )}
                           {(order.status === "picked_up" || order.status === "out_for_delivery") && (
                             <div className="text-sm text-indigo-700 px-1 py-2">
-                              Rider picked up order. In transit to customer.
+                              {order.assigned_rider_name
+                                ? `${order.assigned_rider_name} picked up order. In transit to customer.`
+                                : "Rider picked up order. In transit to customer."}
                             </div>
                           )}
                         </div>

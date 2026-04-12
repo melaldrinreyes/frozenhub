@@ -60,7 +60,7 @@ export default function ProtectedRoute({
       admin: "/admin/dashboard",
       branch_admin: "/branch/dashboard",
       pos_operator: "/pos",
-      customer: "/customer/home",
+      customer: "/customer/shop",
       rider: "/rider/dashboard",
     };
 

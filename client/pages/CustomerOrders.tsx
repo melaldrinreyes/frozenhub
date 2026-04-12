@@ -383,7 +383,7 @@ export default function CustomerOrders() {
                   <ShoppingCart className="h-16 w-16 mx-auto mb-4 opacity-50" />
                   <p className="text-lg font-medium mb-2">No orders found</p>
                   <p className="text-sm mb-4">Start shopping to place your first order!</p>
-                  <Link to="/customer/home">
+                  <Link to="/customer/shop">
                     <Button className="gap-2">
                       <ShoppingBag className="h-4 w-4" />
                       Start Shopping

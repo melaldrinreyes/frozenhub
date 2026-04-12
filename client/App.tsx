@@ -29,7 +29,6 @@ import BranchOnlineOrders from "./pages/BranchOnlineOrders";
 import BranchSettings from "./pages/BranchSettings";
 import BranchUsers from "./pages/BranchUsers";
 import CustomerShop from "./pages/CustomerShop";
-import CustomerHome from "./pages/CustomerHome";
 import CustomerCart from "./pages/CustomerCart";
 import CustomerOrders from "./pages/CustomerOrders";
 import RiderProfile from "./pages/RiderProfile";
@@ -201,11 +200,7 @@ const App = () => (
             {/* Customer Routes */}
             <Route
               path="/customer/home"
-              element={
-                <ProtectedRoute allowedRoles={["customer"]}>
-                  <CustomerHome />
-                </ProtectedRoute>
-              }
+              element={<Navigate to="/customer/shop" replace />}
             />
             <Route
               path="/customer/shop"

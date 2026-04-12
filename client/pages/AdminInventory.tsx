@@ -274,6 +274,14 @@ export default function AdminInventory() {
     return { label: "Adequate", color: "green" };
   };
 
+  const getProgressWidthClass = (percentage: number) => {
+    if (!Number.isFinite(percentage) || percentage <= 0) return "w-0";
+    if (percentage <= 25) return "w-1/4";
+    if (percentage <= 50) return "w-1/2";
+    if (percentage <= 75) return "w-3/4";
+    return "w-full";
+  };
+
   if (isLoading) {
     return (
       <AdminLayout userRole="admin">
@@ -447,6 +455,8 @@ export default function AdminInventory() {
                     <button
                       onClick={() => setSearchTerm("")}
                       className="ml-1 hover:text-red-600"
+                      aria-label="Clear search filter"
+                      title="Clear search filter"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -458,6 +468,8 @@ export default function AdminInventory() {
                     <button
                       onClick={() => setSelectedBranch("")}
                       className="ml-1 hover:text-red-600"
+                      aria-label="Clear branch filter"
+                      title="Clear branch filter"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -469,6 +481,8 @@ export default function AdminInventory() {
                     <button
                       onClick={() => setFilterLowStock(false)}
                       className="ml-1 hover:text-red-600"
+                      aria-label="Clear low stock filter"
+                      title="Clear low stock filter"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -552,7 +566,7 @@ export default function AdminInventory() {
                           <div className="flex items-center justify-center gap-2">
                             <div className="w-16 sm:w-20 bg-slate-200 rounded-full h-2">
                               <div
-                                className={`h-2 rounded-full ${
+                                className={`${getProgressWidthClass(percentage)} h-2 rounded-full ${
                                   percentage === 0
                                     ? "bg-red-500"
                                     : percentage <= 50
@@ -561,9 +575,6 @@ export default function AdminInventory() {
                                         ? "bg-yellow-500"
                                         : "bg-green-500"
                                 }`}
-                                style={{
-                                  width: `${Math.min(percentage, 100)}%`,
-                                }}
                               />
                             </div>
                             <span
@@ -743,6 +754,8 @@ export default function AdminInventory() {
               <Label htmlFor="product">Product</Label>
               <select
                 id="product"
+                title="Product"
+                aria-label="Product"
                 className="w-full px-3 py-2 border border-slate-300 rounded-md"
                 value={formData.productId}
                 onChange={(e) =>
@@ -762,6 +775,8 @@ export default function AdminInventory() {
               <Label htmlFor="branch">Branch</Label>
               <select
                 id="branch"
+                title="Branch"
+                aria-label="Branch"
                 className="w-full px-3 py-2 border border-slate-300 rounded-md"
                 value={formData.branchId}
                 onChange={(e) =>

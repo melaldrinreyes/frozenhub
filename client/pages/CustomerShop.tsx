@@ -105,6 +105,7 @@ export default function CustomerShop() {
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [initialProductRetryCount, setInitialProductRetryCount] = useState(0);
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -166,7 +167,7 @@ export default function CustomerShop() {
   }, [cart]);
 
   // Fetch products from API
-  const { data: productsResponse, isLoading, error } = useQuery({
+  const { data: productsResponse, isLoading, error, refetch: refetchProducts, isFetching } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
       const response = await apiClient.getProducts();
@@ -175,6 +176,8 @@ export default function CustomerShop() {
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchInterval: 5 * 60 * 1000, // Every 5 minutes
+    refetchOnMount: "always",
+    refetchOnReconnect: true,
     refetchOnWindowFocus: false,
   });
 
@@ -195,6 +198,26 @@ export default function CustomerShop() {
       firstProduct: products[0],
     });
   }, [productsResponse, isLoading, products, error]);
+
+  // Some first-load sessions receive an initial empty product list while backend warm-up completes.
+  // Trigger a couple of short retries automatically so users don't need to refresh manually.
+  useEffect(() => {
+    if (isLoading || isFetching || error) return;
+    if (products.length > 0) {
+      if (initialProductRetryCount !== 0) {
+        setInitialProductRetryCount(0);
+      }
+      return;
+    }
+    if (initialProductRetryCount >= 2) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setInitialProductRetryCount((count) => count + 1);
+      refetchProducts();
+    }, 1200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isLoading, isFetching, error, products.length, initialProductRetryCount, refetchProducts]);
 
   // Fetch active promos
   const { data: promosData } = useQuery({

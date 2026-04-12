@@ -647,6 +647,9 @@ export default function BranchDashboard() {
                       Status
                     </th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">
+                      Rider
+                    </th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">
                       Date
                     </th>
                   </tr>
@@ -654,7 +657,7 @@ export default function BranchDashboard() {
                 <tbody>
                   {isLoadingRecentSales ? (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-slate-500">
+                      <td colSpan={6} className="py-8 text-center text-slate-500">
                         Loading recent orders...
                       </td>
                     </tr>
@@ -705,6 +708,9 @@ export default function BranchDashboard() {
                             </span>
                           </td>
                           <td className="py-3 px-4 text-slate-600 text-xs">
+                            {order.assigned_rider_name || "Unassigned"}
+                          </td>
+                          <td className="py-3 px-4 text-slate-600 text-xs">
                             <div>{orderDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
                             <div className="text-slate-400">{orderDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
                           </td>
@@ -713,7 +719,7 @@ export default function BranchDashboard() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-slate-500">
+                      <td colSpan={6} className="py-8 text-center text-slate-500">
                         No recent orders found
                       </td>
                     </tr>
@@ -795,6 +801,14 @@ export default function BranchDashboard() {
                           <div className="text-xs text-slate-500">
                             {orderDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                           </div>
+                        </div>
+                      </div>
+
+                      {/* Rider */}
+                      <div className="mt-3 pt-3 border-t border-slate-200">
+                        <div className="text-xs text-slate-600 font-medium mb-1">Assigned Rider</div>
+                        <div className="text-xs text-slate-800 font-semibold">
+                          {order.assigned_rider_name || "Unassigned"}
                         </div>
                       </div>
                     </div>

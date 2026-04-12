@@ -211,15 +211,15 @@ import {
 let dbInitialized = false;
 let dbInitializing = false;
 let dbInitPromise: Promise<void> | null = null;
-let runtimeDataProvider: "mysql" | "none" = getDataProvider();
+let runtimeDataProvider: "supabase" | "none" = getDataProvider();
 let dbInitErrorMessage: string | null = null;
 let dbInitLastFailureAt = 0;
 const DB_INIT_RETRY_COOLDOWN_MS = 15000;
 
-function getDataProvider(): "mysql" | "none" {
-  const provider = (process.env.DATA_PROVIDER || "mysql").toLowerCase();
+function getDataProvider(): "supabase" | "none" {
+  const provider = (process.env.DATA_PROVIDER || "supabase").toLowerCase();
   if (provider === "none") return "none";
-  return "mysql";
+  return "supabase";
 }
 
 async function ensureDatabaseInitialized() {
@@ -259,17 +259,23 @@ async function ensureDatabaseInitialized() {
       } else {
         await initializeDatabase();
         await seedDatabase();
-        console.log("✓ MySQL initialized successfully");
+        console.log("✓ Supabase/Postgres initialized successfully");
         dbInitialized = true;
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
       const isConnectionRefused =
         error instanceof Error &&
-        ((error as any).code === "ECONNREFUSED" || String(error.message).toLowerCase().includes("econnrefused"));
+        ["ECONNREFUSED", "ENOTFOUND", "ENETUNREACH", "ETIMEDOUT", "EAI_AGAIN"].includes(String((error as any).code || ""));
+      const isDnsOrNetworkFailure =
+        error instanceof Error &&
+        (["ENOTFOUND", "ENETUNREACH", "ETIMEDOUT", "EAI_AGAIN"].includes(String((error as any).code || "")) ||
+          errorMessage.includes("cannot reach ipv6") ||
+          errorMessage.includes("supabase direct db host resolved to ipv6"));
 
-      if (isConnectionRefused && process.env.NODE_ENV !== "production") {
-        console.warn("⚠ MySQL is not reachable; continuing with runtime fallbacks");
-        dbInitialized = true;
+      if ((isConnectionRefused || isDnsOrNetworkFailure) && process.env.NODE_ENV !== "production") {
+        console.warn("⚠ Supabase/Postgres is not reachable; running in degraded mode");
+        dbInitialized = false;
       } else {
         console.error("Error initializing data provider:", error);
         console.warn("⚠ Database initialization failed; keeping runtime in retry mode");
@@ -384,11 +390,14 @@ export function createServer() {
     try {
       await ensureDatabaseInitialized();
       const isLoginEndpoint = req.path === "/api/auth/login";
+      const isUploadEndpoint = req.path === "/api/upload/banner" || req.path === "/api/upload/product-image";
+      const isSettingsMutationEndpoint = req.path.startsWith("/api/settings/") && (req.method === "PUT" || req.method === "DELETE");
+      const isBranchMutationEndpoint = req.path.startsWith("/api/branches") && ["POST", "PUT", "DELETE"].includes(req.method);
 
-      if (!dbInitialized && runtimeDataProvider === "mysql" && req.method !== "GET" && req.path.startsWith("/api/") && req.path !== "/api/ping" && !isLoginEndpoint) {
+      if (!dbInitialized && runtimeDataProvider === "supabase" && req.method !== "GET" && req.path.startsWith("/api/") && req.path !== "/api/ping" && !isLoginEndpoint && !isUploadEndpoint && !isSettingsMutationEndpoint && !isBranchMutationEndpoint) {
         res.status(503).json({
           error: "Database backend unavailable",
-          message: dbInitErrorMessage || "The MySQL database is not currently reachable.",
+          message: "The database backend is not currently reachable.",
         });
         return;
       }
@@ -409,92 +418,92 @@ export function createServer() {
   });
 
   // System stats (public access with lenient rate limit)
-  app.get("/api/stats/system", publicRateLimiter, runtimeDataProvider === "mysql" ? handleGetSystemStatsMySQL : handleGetSystemStats);
+  app.get("/api/stats/system", publicRateLimiter, runtimeDataProvider === "supabase" ? handleGetSystemStatsMySQL : handleGetSystemStats);
 
   // Demo endpoint (with rate limiting)
   app.get("/api/demo", apiRateLimiter, handleDemo);
 
   // Auth routes with specific rate limiters and timing attack prevention
-  app.post("/api/auth/login", loginRateLimiter, preventTimingAttacks, runtimeDataProvider === "mysql" ? handleLoginMySQL : handleLogin);
-  app.post("/api/auth/signup", signupRateLimiter, preventTimingAttacks, runtimeDataProvider === "mysql" ? handleSignupMySQL : handleSignup);
+  app.post("/api/auth/login", loginRateLimiter, preventTimingAttacks, runtimeDataProvider === "supabase" ? handleLoginMySQL : handleLogin);
+  app.post("/api/auth/signup", signupRateLimiter, preventTimingAttacks, runtimeDataProvider === "supabase" ? handleSignupMySQL : handleSignup);
   app.post("/api/auth/logout", handleLogout);
   app.get("/api/auth/me", handleGetMe);
   
   // Product routes (public read access with lenient rate limit)
-  app.get("/api/products", publicRateLimiter, runtimeDataProvider === "mysql" ? handleGetProductsMySQL : handleGetProducts);
-  app.get("/api/products/:id", publicRateLimiter, runtimeDataProvider === "mysql" ? handleGetProductMySQL : handleGetProduct);
-  app.post("/api/products", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleCreateProductMySQL : handleCreateProduct);
-  app.put("/api/products/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleUpdateProductMySQL : handleUpdateProduct);
-  app.delete("/api/products/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleDeleteProductMySQL : handleDeleteProduct);
+  app.get("/api/products", publicRateLimiter, runtimeDataProvider === "supabase" ? handleGetProductsMySQL : handleGetProducts);
+  app.get("/api/products/:id", publicRateLimiter, runtimeDataProvider === "supabase" ? handleGetProductMySQL : handleGetProduct);
+  app.post("/api/products", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleCreateProductMySQL : handleCreateProduct);
+  app.put("/api/products/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleUpdateProductMySQL : handleUpdateProduct);
+  app.delete("/api/products/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleDeleteProductMySQL : handleDeleteProduct);
 
   // Inventory routes
-  app.get("/api/inventory", requireAuth, apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetInventoryMySQL : handleGetInventory);
-  app.get("/api/inventory/low-stock", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetLowStockMySQL : handleGetLowStock);
-  app.post("/api/inventory/cleanup-duplicates", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleCleanupDuplicatesMySQL : handleCleanupDuplicates);
-  app.post("/api/inventory", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleAddInventoryMySQL : handleAddInventory);
-  app.put("/api/inventory/:id", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleUpdateInventoryMySQL : handleUpdateInventory);
-  app.delete("/api/inventory/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleDeleteInventoryMySQL : handleDeleteInventory);
-  app.post("/api/inventory/transfer", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleStockTransferMySQL : handleStockTransfer);
-  app.get("/api/inventory/transfer-logs", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetTransferLogsMySQL : handleGetTransferLogs);
-  app.get("/api/inventory/product/:productId", requireAuth, apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetProductAvailabilityMySQL : handleGetProductAvailability);
+  app.get("/api/inventory", requireAuth, apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetInventoryMySQL : handleGetInventory);
+  app.get("/api/inventory/low-stock", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetLowStockMySQL : handleGetLowStock);
+  app.post("/api/inventory/cleanup-duplicates", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleCleanupDuplicatesMySQL : handleCleanupDuplicates);
+  app.post("/api/inventory", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleAddInventoryMySQL : handleAddInventory);
+  app.put("/api/inventory/:id", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleUpdateInventoryMySQL : handleUpdateInventory);
+  app.delete("/api/inventory/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleDeleteInventoryMySQL : handleDeleteInventory);
+  app.post("/api/inventory/transfer", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleStockTransferMySQL : handleStockTransfer);
+  app.get("/api/inventory/transfer-logs", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetTransferLogsMySQL : handleGetTransferLogs);
+  app.get("/api/inventory/product/:productId", requireAuth, apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetProductAvailabilityMySQL : handleGetProductAvailability);
 
   // Branch & User management routes (admin only with strict limits)
-  app.get("/api/branches", requireAuth, apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetBranchesMySQL : handleGetBranches);
-  app.post("/api/branches", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleCreateBranchMySQL : handleCreateBranch);
-  app.put("/api/branches/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleUpdateBranchMySQL : handleUpdateBranch);
-  app.delete("/api/branches/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleDeleteBranchMySQL : handleDeleteBranch);
-  app.get("/api/users", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetUsersMySQL : handleGetUsers);
-  app.post("/api/users", requireAuth, requireRole("admin", "branch_admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleCreateUserMySQL : handleCreateUser);
-  app.put("/api/users/:id", requireAuth, requireRole("admin", "branch_admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleUpdateUserMySQL : handleUpdateUser);
-  app.patch("/api/riders/:id/branch", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleAssignRiderBranchMySQL : handleUpdateUser);
-  app.delete("/api/users/:id", requireAuth, requireRole("admin", "branch_admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleDeleteUserMySQL : handleDeleteUser);
-  app.post("/api/change-password", requireAuth, strictRateLimiter, runtimeDataProvider === "mysql" ? handleChangePasswordMySQL : handleChangePassword);
+  app.get("/api/branches", requireAuth, apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetBranchesMySQL : handleGetBranches);
+  app.post("/api/branches", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleCreateBranchMySQL : handleCreateBranch);
+  app.put("/api/branches/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleUpdateBranchMySQL : handleUpdateBranch);
+  app.delete("/api/branches/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleDeleteBranchMySQL : handleDeleteBranch);
+  app.get("/api/users", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetUsersMySQL : handleGetUsers);
+  app.post("/api/users", requireAuth, requireRole("admin", "branch_admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleCreateUserMySQL : handleCreateUser);
+  app.put("/api/users/:id", requireAuth, requireRole("admin", "branch_admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleUpdateUserMySQL : handleUpdateUser);
+  app.patch("/api/riders/:id/branch", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleAssignRiderBranchMySQL : handleUpdateUser);
+  app.delete("/api/users/:id", requireAuth, requireRole("admin", "branch_admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleDeleteUserMySQL : handleDeleteUser);
+  app.post("/api/change-password", requireAuth, strictRateLimiter, runtimeDataProvider === "supabase" ? handleChangePasswordMySQL : handleChangePassword);
 
   // Sales routes
-  app.get("/api/sales", requireAuth, requireRole("admin", "branch_admin", "rider"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetSalesMySQL : handleGetSales);
-  app.get("/api/rider/delivery-history", requireAuth, requireRole("rider"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetRiderDeliveryHistoryMySQL : handleGetSales);
-  app.get("/api/sales/stats", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetSalesStatsMySQL : handleGetSalesStats);
-  app.get("/api/sales/trend", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetSalesTrendMySQL : handleGetSalesTrend);
-  app.get("/api/sales/:id/items", requireAuth, requireRole("admin", "branch_admin", "customer", "rider"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetSaleItemsMySQL : handleGetSaleItems);
-  app.patch("/api/sales/:id/status", requireAuth, requireRole("admin", "branch_admin", "rider"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleUpdateOrderStatusMySQL : handleUpdateOrderStatus);
-  app.patch("/api/sales/:id/assign-rider", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleAssignRiderMySQL : handleUpdateOrderStatus);
-  app.post("/api/sales", requireAuth, requireRole("admin", "branch_admin", "pos_operator"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleCreateSaleMySQL : handleCreateSale);
+  app.get("/api/sales", requireAuth, requireRole("admin", "branch_admin", "pos_operator", "rider"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetSalesMySQL : handleGetSales);
+  app.get("/api/rider/delivery-history", requireAuth, requireRole("rider"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetRiderDeliveryHistoryMySQL : handleGetSales);
+  app.get("/api/sales/stats", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetSalesStatsMySQL : handleGetSalesStats);
+  app.get("/api/sales/trend", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetSalesTrendMySQL : handleGetSalesTrend);
+  app.get("/api/sales/:id/items", requireAuth, requireRole("admin", "branch_admin", "customer", "rider"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetSaleItemsMySQL : handleGetSaleItems);
+  app.patch("/api/sales/:id/status", requireAuth, requireRole("admin", "branch_admin", "rider"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleUpdateOrderStatusMySQL : handleUpdateOrderStatus);
+  app.patch("/api/sales/:id/assign-rider", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleAssignRiderMySQL : handleUpdateOrderStatus);
+  app.post("/api/sales", requireAuth, requireRole("admin", "branch_admin", "pos_operator"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleCreateSaleMySQL : handleCreateSale);
   
   // Customer order route (public, no authentication required)
-  app.post("/api/customer/order", apiRateLimiter, runtimeDataProvider === "mysql" ? handleCreateCustomerOrderMySQL : handleCreateCustomerOrder);
-  app.get("/api/customer/orders", apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetCustomerOrdersMySQL : handleGetCustomerOrders);
-  app.post("/api/customer/orders/:orderId/cancel", apiRateLimiter, runtimeDataProvider === "mysql" ? handleCancelCustomerOrderMySQL : handleCancelCustomerOrder);
+  app.post("/api/customer/order", apiRateLimiter, runtimeDataProvider === "supabase" ? handleCreateCustomerOrderMySQL : handleCreateCustomerOrder);
+  app.get("/api/customer/orders", apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetCustomerOrdersMySQL : handleGetCustomerOrders);
+  app.post("/api/customer/orders/:orderId/cancel", apiRateLimiter, runtimeDataProvider === "supabase" ? handleCancelCustomerOrderMySQL : handleCancelCustomerOrder);
 
   // Pricing routes
-  app.get("/api/pricing", requireAuth, requireRole("admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetPricingMySQL : handleGetPricing);
-  app.post("/api/pricing", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleCreatePricingMySQL : handleCreatePricing);
-  app.put("/api/pricing/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleUpdatePricingMySQL : handleUpdatePricing);
-  app.delete("/api/pricing/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleDeletePricingMySQL : handleDeletePricing);
+  app.get("/api/pricing", requireAuth, requireRole("admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetPricingMySQL : handleGetPricing);
+  app.post("/api/pricing", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleCreatePricingMySQL : handleCreatePricing);
+  app.put("/api/pricing/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleUpdatePricingMySQL : handleUpdatePricing);
+  app.delete("/api/pricing/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleDeletePricingMySQL : handleDeletePricing);
 
   // Purchase routes (receiving inventory from suppliers)
-  app.get("/api/purchases", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetPurchasesMySQL : handleGetPurchases);
-  app.get("/api/purchases/stats", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetPurchaseStatsMySQL : handleGetPurchaseStats);
-  app.get("/api/purchases/trend", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetPurchaseTrendMySQL : handleGetPurchaseTrend);
-  app.get("/api/purchases/:id", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetPurchaseMySQL : handleGetPurchase);
-  app.post("/api/purchases", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleCreatePurchaseMySQL : handleCreatePurchase);
-  app.put("/api/purchases/:id", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleUpdatePurchaseMySQL : handleUpdatePurchase);
-  app.delete("/api/purchases/:id", requireAuth, requireRole("admin", "branch_admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleDeletePurchaseMySQL : handleDeletePurchase);
+  app.get("/api/purchases", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetPurchasesMySQL : handleGetPurchases);
+  app.get("/api/purchases/stats", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetPurchaseStatsMySQL : handleGetPurchaseStats);
+  app.get("/api/purchases/trend", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetPurchaseTrendMySQL : handleGetPurchaseTrend);
+  app.get("/api/purchases/:id", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetPurchaseMySQL : handleGetPurchase);
+  app.post("/api/purchases", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleCreatePurchaseMySQL : handleCreatePurchase);
+  app.put("/api/purchases/:id", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleUpdatePurchaseMySQL : handleUpdatePurchase);
+  app.delete("/api/purchases/:id", requireAuth, requireRole("admin", "branch_admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleDeletePurchaseMySQL : handleDeletePurchase);
   
   // Supplier routes
-  app.get("/api/suppliers", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? handleGetSuppliersMySQL : handleGetSuppliers);
-  app.post("/api/suppliers", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleCreateSupplierMySQL : handleCreateSupplier);
+  app.get("/api/suppliers", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetSuppliersMySQL : handleGetSuppliers);
+  app.post("/api/suppliers", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleCreateSupplierMySQL : handleCreateSupplier);
 
   // Category routes (public read access with lenient rate limit)
-  app.get("/api/categories", publicRateLimiter, runtimeDataProvider === "mysql" ? handleGetCategoriesMySQL : handleGetCategories);
-  app.post("/api/categories", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleCreateCategoryMySQL : handleCreateCategory);
-  app.put("/api/categories/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleUpdateCategoryMySQL : handleUpdateCategory);
-  app.delete("/api/categories/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleDeleteCategoryMySQL : handleDeleteCategory);
+  app.get("/api/categories", publicRateLimiter, runtimeDataProvider === "supabase" ? handleGetCategoriesMySQL : handleGetCategories);
+  app.post("/api/categories", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleCreateCategoryMySQL : handleCreateCategory);
+  app.put("/api/categories/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleUpdateCategoryMySQL : handleUpdateCategory);
+  app.delete("/api/categories/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleDeleteCategoryMySQL : handleDeleteCategory);
 
   // Settings routes (public read access with lenient rate limit)
-  app.get("/api/settings", publicRateLimiter, runtimeDataProvider === "mysql" ? handleGetSettingsMySQL : handleGetSettings);
-  app.get("/api/settings/:key", publicRateLimiter, runtimeDataProvider === "mysql" ? handleGetSettingMySQL : handleGetSetting);
-  app.put("/api/settings/:key", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleUpdateSettingMySQL : handleUpdateSetting);
-  app.delete("/api/settings/:key", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? handleDeleteSettingMySQL : handleDeleteSetting);
+  app.get("/api/settings", publicRateLimiter, runtimeDataProvider === "supabase" ? handleGetSettingsMySQL : handleGetSettings);
+  app.get("/api/settings/:key", publicRateLimiter, runtimeDataProvider === "supabase" ? handleGetSettingMySQL : handleGetSetting);
+  app.put("/api/settings/:key", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleUpdateSettingMySQL : handleUpdateSetting);
+  app.delete("/api/settings/:key", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleDeleteSettingMySQL : handleDeleteSetting);
 
   // Upload routes (strict rate limiting for file uploads)
   app.post("/api/upload/product-image", requireAuth, requireRole("admin"), strictRateLimiter, upload.single("image"), handleUploadProductImage);
@@ -503,15 +512,15 @@ export function createServer() {
   app.delete("/api/upload/banner", requireAuth, requireRole("admin"), strictRateLimiter, handleDeleteBanner);
 
   // Promo routes (active promos is public, others admin only)
-  app.get("/api/promos/active", publicRateLimiter, runtimeDataProvider === "mysql" ? getActivePromosMySQL : getActivePromos);
-  app.get("/api/promos/analytics", requireAuth, requireRole("admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? getPromoAnalyticsMySQL : getPromoAnalytics);
-  app.get("/api/promos", requireAuth, requireRole("admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? getPromosMySQL : getPromos);
-  app.get("/api/promos/:id", requireAuth, requireRole("admin"), apiRateLimiter, runtimeDataProvider === "mysql" ? getPromoMySQL : getPromo);
-  app.post("/api/promos", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? createPromoMySQL : createPromo);
-  app.put("/api/promos/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? updatePromoMySQL : updatePromo);
-  app.post("/api/promos/bulk", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? bulkUpdatePromosMySQL : bulkUpdatePromos);
-  app.delete("/api/promos/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "mysql" ? deletePromoMySQL : deletePromo);
-  app.get("/api/products/:productId/promos", publicRateLimiter, runtimeDataProvider === "mysql" ? getProductPromosMySQL : getProductPromos);
+  app.get("/api/promos/active", publicRateLimiter, runtimeDataProvider === "supabase" ? getActivePromosMySQL : getActivePromos);
+  app.get("/api/promos/analytics", requireAuth, requireRole("admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? getPromoAnalyticsMySQL : getPromoAnalytics);
+  app.get("/api/promos", requireAuth, requireRole("admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? getPromosMySQL : getPromos);
+  app.get("/api/promos/:id", requireAuth, requireRole("admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? getPromoMySQL : getPromo);
+  app.post("/api/promos", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? createPromoMySQL : createPromo);
+  app.put("/api/promos/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? updatePromoMySQL : updatePromo);
+  app.post("/api/promos/bulk", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? bulkUpdatePromosMySQL : bulkUpdatePromos);
+  app.delete("/api/promos/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? deletePromoMySQL : deletePromo);
+  app.get("/api/products/:productId/promos", publicRateLimiter, runtimeDataProvider === "supabase" ? getProductPromosMySQL : getProductPromos);
 
   // Cart routes (customers only)
   app.get("/api/cart", requireAuth, requireRole("customer"), apiRateLimiter, getCart);
@@ -547,3 +556,4 @@ export function createServer() {
 
   return app;
 }
+

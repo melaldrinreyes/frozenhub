@@ -1,6 +1,8 @@
 import { RequestHandler } from "express";
 import bcrypt from "bcryptjs";
 import { getConnection } from "../db";
+import fs from "fs";
+import path from "path";
 
 const BCRYPT_ROUNDS = 12;
 
@@ -17,6 +19,43 @@ function normalizeRole(role: any) {
   const allowed = new Set(["admin", "branch_admin", "pos_operator", "customer", "rider"]);
   if (typeof role === "string" && allowed.has(role)) return role;
   return null;
+}
+
+const settingsFallbackPath = path.join(process.cwd(), "data", "settings-fallback.json");
+
+function isDatabaseUnavailableError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const code = String((error as any).code || "");
+  const message = error.message.toLowerCase();
+  return ["ECONNREFUSED", "PROTOCOL_CONNECTION_LOST", "ENOTFOUND", "ENETUNREACH", "ETIMEDOUT", "EAI_AGAIN"].includes(code) ||
+    message.includes("econnrefused") ||
+    message.includes("cannot reach ipv6") ||
+    message.includes("supabase direct db host resolved to ipv6");
+}
+
+function ensureFallbackDir() {
+  const dir = path.dirname(settingsFallbackPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
+function readFallbackSettings(): Record<string, string | null> {
+  try {
+    ensureFallbackDir();
+    if (!fs.existsSync(settingsFallbackPath)) return {};
+    const raw = fs.readFileSync(settingsFallbackPath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed as Record<string, string | null>;
+  } catch {
+    return {};
+  }
+}
+
+function writeFallbackSettings(settings: Record<string, string | null>) {
+  ensureFallbackDir();
+  fs.writeFileSync(settingsFallbackPath, JSON.stringify(settings, null, 2), "utf8");
 }
 
 function isPaymentStatusEnumMismatch(error: any): boolean {
@@ -101,17 +140,17 @@ async function upsertDeliveryHistoryRecord(connection: any, saleId: string) {
     WHERE s.id = ?
       AND s.assigned_rider_id IS NOT NULL
       AND s.customer_info IS NOT NULL
-    ON DUPLICATE KEY UPDATE
-      rider_id = VALUES(rider_id),
-      branch_id = VALUES(branch_id),
-      customer_name = VALUES(customer_name),
-      customer_phone = VALUES(customer_phone),
-      customer_address = VALUES(customer_address),
-      total_amount = VALUES(total_amount),
-      payment_status = VALUES(payment_status),
-      picked_up_at = VALUES(picked_up_at),
-      delivered_at = VALUES(delivered_at),
-      created_at = VALUES(created_at)`,
+    ON CONFLICT (sale_id) DO UPDATE SET
+      rider_id = EXCLUDED.rider_id,
+      branch_id = EXCLUDED.branch_id,
+      customer_name = EXCLUDED.customer_name,
+      customer_phone = EXCLUDED.customer_phone,
+      customer_address = EXCLUDED.customer_address,
+      total_amount = EXCLUDED.total_amount,
+      payment_status = EXCLUDED.payment_status,
+      picked_up_at = EXCLUDED.picked_up_at,
+      delivered_at = EXCLUDED.delivered_at,
+      created_at = EXCLUDED.created_at` ,
     [saleId]
   );
 }
@@ -130,9 +169,9 @@ async function upsertRiderBranchAssignment(
   await connection.query(
     `INSERT INTO rider_branch_assignments (id, rider_id, branch_id, assigned_by, active, created_at, updated_at)
      VALUES (?, ?, ?, ?, TRUE, NOW(), NOW())
-     ON DUPLICATE KEY UPDATE
-       branch_id = VALUES(branch_id),
-       assigned_by = VALUES(assigned_by),
+     ON CONFLICT (rider_id) DO UPDATE SET
+       branch_id = EXCLUDED.branch_id,
+       assigned_by = EXCLUDED.assigned_by,
        active = TRUE,
        updated_at = NOW()`,
     [`rba-${riderId}`, riderId, branchId, assignedBy]
@@ -140,55 +179,7 @@ async function upsertRiderBranchAssignment(
 }
 
 async function ensureProcurementTables(connection: any) {
-  await connection.query(
-    `CREATE TABLE IF NOT EXISTS suppliers (
-      id VARCHAR(255) PRIMARY KEY,
-      name VARCHAR(255) NOT NULL,
-      contact_person VARCHAR(255) NULL,
-      phone VARCHAR(50) NULL,
-      email VARCHAR(255) NULL,
-      address TEXT NULL,
-      created_at DATETIME NOT NULL,
-      updated_at DATETIME NOT NULL,
-      INDEX idx_supplier_name (name)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
-  );
-
-  await connection.query(
-    `CREATE TABLE IF NOT EXISTS purchases (
-      id VARCHAR(255) PRIMARY KEY,
-      supplier_id VARCHAR(255) NULL,
-      branch_id VARCHAR(255) NOT NULL,
-      invoice_number VARCHAR(255) NULL,
-      purchase_date DATETIME NOT NULL,
-      total_amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
-      status ENUM('received', 'pending', 'cancelled') NOT NULL DEFAULT 'received',
-      notes TEXT NULL,
-      created_by VARCHAR(255) NULL,
-      created_at DATETIME NOT NULL,
-      updated_at DATETIME NOT NULL,
-      INDEX idx_purchase_date (purchase_date),
-      INDEX idx_purchase_branch (branch_id),
-      INDEX idx_purchase_supplier (supplier_id),
-      CONSTRAINT fk_purchase_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL,
-      CONSTRAINT fk_purchase_branch FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
-  );
-
-  await connection.query(
-    `CREATE TABLE IF NOT EXISTS purchase_items (
-      id VARCHAR(255) PRIMARY KEY,
-      purchase_id VARCHAR(255) NOT NULL,
-      product_id VARCHAR(255) NOT NULL,
-      quantity INT NOT NULL,
-      cost DECIMAL(10, 2) NOT NULL,
-      total DECIMAL(10, 2) NOT NULL,
-      CONSTRAINT fk_purchase_item_purchase FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE,
-      CONSTRAINT fk_purchase_item_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-      INDEX idx_purchase_item_purchase (purchase_id),
-      INDEX idx_purchase_item_product (product_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
-  );
+  return;
 }
 
 export const handleCreateProductMySQL: RequestHandler = async (req, res) => {
@@ -354,7 +345,12 @@ export const handleGetLowStockMySQL: RequestHandler = async (_req, res) => {
 };
 
 export const handleAddInventoryMySQL: RequestHandler = async (req, res) => {
-  const { productId, branchId, quantity, reorderLevel } = req.body || {};
+  const body = req.body || {};
+  const productId = body.productId ?? body.product_id;
+  const branchId = body.branchId ?? body.branch_id;
+  const quantity = body.quantity;
+  const reorderLevel = body.reorderLevel ?? body.reorder_level;
+
   if (!productId || !branchId) {
     res.status(400).json({ error: "productId and branchId are required" });
     return;
@@ -367,9 +363,9 @@ export const handleAddInventoryMySQL: RequestHandler = async (req, res) => {
     await connection.query(
       `INSERT INTO inventory (id, product_id, branch_id, quantity, reorder_level, last_stock_check)
        VALUES (?, ?, ?, ?, ?, NOW())
-       ON DUPLICATE KEY UPDATE
-         quantity = quantity + VALUES(quantity),
-         reorder_level = VALUES(reorder_level),
+       ON CONFLICT (product_id, branch_id) DO UPDATE SET
+         quantity = inventory.quantity + EXCLUDED.quantity,
+         reorder_level = EXCLUDED.reorder_level,
          last_stock_check = NOW()`,
       [id, productId, branchId, Math.max(0, Math.floor(toNumber(quantity, 0))), Math.max(0, Math.floor(toNumber(reorderLevel, 50)))]
     );
@@ -395,7 +391,9 @@ export const handleAddInventoryMySQL: RequestHandler = async (req, res) => {
 
 export const handleUpdateInventoryMySQL: RequestHandler = async (req, res) => {
   const { id } = req.params;
-  const { quantity, reorderLevel } = req.body || {};
+  const body = req.body || {};
+  const quantity = body.quantity;
+  const reorderLevel = body.reorderLevel ?? body.reorder_level;
 
   const updates: string[] = [];
   const values: any[] = [];
@@ -1259,7 +1257,15 @@ export const handleUpdateOrderStatusMySQL: RequestHandler = async (req, res) => 
 };
 
 export const handleCreateCustomerOrderMySQL: RequestHandler = async (req, res) => {
-  const { branchId, items, paymentMethod, totalAmount, customerInfo, notes, customerEmail, customerId } = req.body || {};
+  const body = req.body || {};
+  const branchId = body.branchId ?? body.branch_id;
+  const items = Array.isArray(body.items) ? body.items : [];
+  const paymentMethod = body.paymentMethod ?? body.payment_method;
+  const totalAmount = body.totalAmount ?? body.total_amount;
+  const customerInfo = body.customerInfo ?? body.customer_info;
+  const notes = body.notes;
+  const customerEmail = body.customerEmail ?? body.customer_email;
+  const customerId = body.customerId ?? body.customer_id;
 
   if (!branchId || !Array.isArray(items) || items.length === 0) {
     res.status(400).json({ error: "branchId and items are required" });
@@ -1288,7 +1294,7 @@ export const handleCreateCustomerOrderMySQL: RequestHandler = async (req, res) =
     }> = [];
 
     for (const item of items) {
-      const productId = item?.productId;
+      const productId = item?.productId ?? item?.product_id ?? item?.id;
       const quantity = Math.max(1, Math.floor(toNumber(item?.quantity, 1)));
       if (!productId) throw new Error("Invalid order item");
 
@@ -1723,8 +1729,8 @@ export const handleCreatePurchaseMySQL: RequestHandler = async (req, res) => {
       await connection.query(
         `INSERT INTO inventory (id, product_id, branch_id, quantity, reorder_level, last_stock_check)
          VALUES (?, ?, ?, ?, 50, NOW())
-         ON DUPLICATE KEY UPDATE
-           quantity = quantity + VALUES(quantity),
+         ON CONFLICT (product_id, branch_id) DO UPDATE SET
+           quantity = inventory.quantity + EXCLUDED.quantity,
            last_stock_check = NOW()`,
         [randomId("inv"), productId, branchId, quantity]
       );
@@ -1817,8 +1823,8 @@ export const handleUpdatePurchaseMySQL: RequestHandler = async (req, res) => {
         await connection.query(
           `INSERT INTO inventory (id, product_id, branch_id, quantity, reorder_level, last_stock_check)
            VALUES (?, ?, ?, ?, 50, NOW())
-           ON DUPLICATE KEY UPDATE
-             quantity = quantity + VALUES(quantity),
+           ON CONFLICT (product_id, branch_id) DO UPDATE SET
+             quantity = inventory.quantity + EXCLUDED.quantity,
              last_stock_check = NOW()`,
           [randomId("inv"), productId, branchId || existing.branch_id, quantity]
         );
@@ -1983,12 +1989,12 @@ export const handleGetPurchaseTrendMySQL: RequestHandler = async (req, res) => {
     const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
 
     const [rows] = await connection.query(
-      `SELECT DATE_FORMAT(purchase_date, '%b %d') as month,
+      `SELECT TO_CHAR(purchase_date, 'Mon DD') as month,
               COALESCE(SUM(total_amount), 0) as purchases
        FROM purchases
        ${where}
-       GROUP BY DATE(purchase_date)
-       ORDER BY DATE(purchase_date) ASC`,
+       GROUP BY TO_CHAR(purchase_date, 'YYYY-MM-DD'), TO_CHAR(purchase_date, 'Mon DD')
+       ORDER BY TO_CHAR(purchase_date, 'YYYY-MM-DD') ASC`,
       params
     );
 
@@ -2061,12 +2067,31 @@ export const handleCreateCategoryMySQL: RequestHandler = async (req, res) => {
   let connection;
   try {
     connection = await getConnection();
+    const normalizedName = String(name).trim();
+
+    const [existingRows] = await connection.query(
+      `SELECT * FROM categories
+       WHERE LOWER(TRIM(name)) = LOWER(?)
+       LIMIT 1`,
+      [normalizedName]
+    );
+
+    const existingCategory = (existingRows as any[])[0];
+    if (existingCategory) {
+      res.status(200).json({
+        category: existingCategory,
+        alreadyExists: true,
+        message: "Category already exists",
+      });
+      return;
+    }
+
     const id = randomId("cat");
 
     await connection.query(
       `INSERT INTO categories (id, name, description, active, created_at)
        VALUES (?, ?, ?, ?, NOW())`,
-      [id, String(name).trim(), description || null, active !== false]
+      [id, normalizedName, description || null, active !== false]
     );
 
     const [rows] = await connection.query("SELECT * FROM categories WHERE id = ? LIMIT 1", [id]);
@@ -2074,6 +2099,27 @@ export const handleCreateCategoryMySQL: RequestHandler = async (req, res) => {
   } catch (error: any) {
     console.error("MySQL create category error:", error);
     if (String(error?.message || "").includes("Duplicate entry")) {
+      const normalizedName = String(name).trim();
+      try {
+        const [rows] = await connection?.query(
+          `SELECT * FROM categories
+           WHERE LOWER(TRIM(name)) = LOWER(?)
+           LIMIT 1`,
+          [normalizedName]
+        );
+        const existingCategory = (rows as any[])[0];
+        if (existingCategory) {
+          res.status(200).json({
+            category: existingCategory,
+            alreadyExists: true,
+            message: "Category already exists",
+          });
+          return;
+        }
+      } catch {
+        // Fall through to conflict response if lookup fails.
+      }
+
       res.status(409).json({ error: "Category already exists" });
       return;
     }
@@ -2161,7 +2207,7 @@ export const handleUpdateSettingMySQL: RequestHandler = async (req, res) => {
     await connection.query(
       `INSERT INTO settings (id, setting_key, setting_value, updated_at, updated_by)
        VALUES (?, ?, ?, NOW(), ?)
-       ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = NOW(), updated_by = VALUES(updated_by)`,
+       ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW(), updated_by = EXCLUDED.updated_by`,
       [
         randomId("setting"),
         key,
@@ -2180,6 +2226,24 @@ export const handleUpdateSettingMySQL: RequestHandler = async (req, res) => {
 
     res.json({ setting: (rows as any[])[0], message: "Setting updated successfully" });
   } catch (error) {
+    if (isDatabaseUnavailableError(error) && process.env.NODE_ENV !== "production") {
+      const fallbackSettings = readFallbackSettings();
+      fallbackSettings[key] = value ?? null;
+      writeFallbackSettings(fallbackSettings);
+
+      res.json({
+        setting: {
+          id: `fallback-${key}`,
+          setting_key: key,
+          setting_value: value ?? null,
+          updated_at: new Date().toISOString(),
+          updated_by: req.user?.id || req.session?.userId || null,
+        },
+        message: "Setting updated locally (database offline)",
+      });
+      return;
+    }
+
     console.error("MySQL update setting error:", error);
     res.status(500).json({ error: "Failed to update setting" });
   } finally {
@@ -2199,6 +2263,17 @@ export const handleDeleteSettingMySQL: RequestHandler = async (req, res) => {
     }
     res.json({ message: "Setting deleted successfully" });
   } catch (error) {
+    if (isDatabaseUnavailableError(error) && process.env.NODE_ENV !== "production") {
+      const fallbackSettings = readFallbackSettings();
+      if (Object.prototype.hasOwnProperty.call(fallbackSettings, key)) {
+        delete fallbackSettings[key];
+        writeFallbackSettings(fallbackSettings);
+      }
+
+      res.json({ message: "Setting deleted locally (database offline)" });
+      return;
+    }
+
     console.error("MySQL delete setting error:", error);
     res.status(500).json({ error: "Failed to delete setting" });
   } finally {

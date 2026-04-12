@@ -49,7 +49,7 @@ export default function LoginModal({ onClose }: LoginModalProps) {
         } else if (user.role === "pos_operator") {
           navigate("/pos");
         } else if (user.role === "customer") {
-          navigate("/customer/home");
+          navigate("/customer/shop");
         } else if (user.role === "rider") {
           navigate("/rider/dashboard");
         }
@@ -89,7 +89,7 @@ export default function LoginModal({ onClose }: LoginModalProps) {
         signUpData.password,
       );
       if (user) {
-        navigate("/customer/home");
+        navigate("/customer/shop");
         onClose();
       }
     } catch (err: any) {

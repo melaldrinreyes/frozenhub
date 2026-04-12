@@ -437,7 +437,7 @@ export default function AdminSettings() {
                   Database
                 </p>
                 <p className="text-lg font-semibold text-slate-900">
-                  MySQL (frozenhub_pos)
+                  Supabase Postgres
                 </p>
               </div>
 

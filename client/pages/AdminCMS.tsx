@@ -838,8 +838,8 @@ export default function AdminCMS() {
             </Button>
             <Button
               onClick={() => {
-                // Open customer home in new tab
-                const url = window.location.origin + "/customer/home";
+                // Open customer shop in new tab
+                const url = window.location.origin + "/customer/shop";
                 window.open(url, "_blank");
               }}
               variant="outline"

@@ -7,7 +7,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Snowflake,
-  Home,
   ShoppingBag,
   ShoppingCart,
   LogOut,
@@ -69,7 +68,7 @@ function normalizeCartItem(item: any): CartItem {
 
   return {
     id: item.id,
-    name: item.name,
+      // Home,
     price: typeof item.price === "string" ? parseFloat(item.price) : item.price,
     quantity: item.quantity || 1,
     image: item.image,
@@ -135,9 +134,9 @@ export default function CustomerCart() {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
       
-      // Navigate to success page or home
+      // Navigate to customer shop after successful order
       setTimeout(() => {
-        navigate("/customer/home");
+        navigate("/customer/shop");
       }, 1500);
     },
     onError: (error: any) => {
@@ -506,15 +505,7 @@ export default function CustomerCart() {
 
       {/* Bottom Navigation (Mobile) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-black border-t border-gold-500/20 z-50 pb-safe">
-        <div className="grid grid-cols-4 h-16">
-          {/* Home */}
-          <button
-            onClick={() => navigate("/customer/home")}
-            className="flex flex-col items-center justify-center gap-1 text-gray-400 hover:text-gold-400 transition-colors"
-          >
-            <Home className="w-5 h-5" />
-            <span className="text-xs font-medium">Home</span>
-          </button>
+        <div className="grid grid-cols-3 h-16">
 
           {/* Shop */}
           <button

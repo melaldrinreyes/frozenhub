@@ -434,6 +434,9 @@ export default function BranchSales() {
                     <th className="text-center py-4 px-4 font-semibold text-slate-900 border-r border-slate-200">
                       Status
                     </th>
+                    <th className="text-center py-4 px-4 font-semibold text-slate-900 border-r border-slate-200">
+                      Rider
+                    </th>
                     <th className="text-center py-4 px-4 font-semibold text-slate-900">
                       Actions
                     </th>
@@ -512,6 +515,9 @@ export default function BranchSales() {
                               (sale.status || 'completed').slice(1))}
                           </span>
                         </td>
+                        <td className="py-4 px-4 text-center text-xs text-slate-700 border-r border-slate-200">
+                          {sale.assigned_rider_name || "Unassigned"}
+                        </td>
                         <td className="py-4 px-4 text-center">
                           <Button
                             size="sm"
@@ -535,7 +541,7 @@ export default function BranchSales() {
                       </tr>
                       {expandedSaleId === sale.id && sale.items && sale.items.length > 0 && (
                         <tr key={`sale-${sale.id}-items`} className="bg-slate-100 border-b-2 border-slate-300">
-                          <td colSpan={7} className="py-4 px-4">
+                          <td colSpan={8} className="py-4 px-4">
                             <div className="ml-8 border-2 border-slate-200 rounded-lg p-4 bg-white">
                               <h4 className="font-semibold text-slate-900 mb-3 text-sm">Items Purchased:</h4>
                               <div className="overflow-x-auto">
@@ -652,6 +658,14 @@ export default function BranchSales() {
                       <div className="text-xs text-slate-600 font-medium mb-1">Amount</div>
                       <div className="text-2xl font-bold text-gold-600">
                         ₱{parseFloat(sale.total_amount || 0).toFixed(2)}
+                      </div>
+                    </div>
+
+                    {/* Rider */}
+                    <div className="mb-3">
+                      <div className="text-xs text-slate-600 font-medium mb-1">Assigned Rider</div>
+                      <div className="text-sm font-semibold text-slate-800">
+                        {sale.assigned_rider_name || "Unassigned"}
                       </div>
                     </div>
 

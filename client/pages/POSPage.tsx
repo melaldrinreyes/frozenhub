@@ -279,7 +279,7 @@ export default function POSPage() {
     }
   };
 
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const branchName = useBranchName(user?.branch_id);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -332,6 +332,20 @@ export default function POSPage() {
       return response.json();
     },
     enabled: !!user?.branch_id,
+  });
+
+  const { data: salesHistoryData } = useQuery({
+    queryKey: ["sales", "pos-history", user?.branch_id],
+    queryFn: async () => {
+      if (!user?.branch_id) return { sales: [] };
+      const response = await fetch(`/api/sales?branchId=${user.branch_id}&page=1&limit=10`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch sales history");
+      }
+      return response.json();
+    },
+    enabled: !!user?.branch_id,
+    refetchInterval: 30 * 1000,
   });
 
   // Create sale mutation
@@ -403,6 +417,12 @@ export default function POSPage() {
   const products = productsData?.products || [];
   const activePromos = promosData?.promos || [];
   const inventory = inventoryData?.inventory || [];
+  const salesHistory = salesHistoryData?.sales || [];
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/");
+  };
 
   // Map inventory to products
   const productsWithStock = products.map((product: any) => {
@@ -622,11 +642,11 @@ export default function POSPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-slate-50 to-slate-100">
       {/* Header */}
       <header className="bg-gradient-to-r from-black via-gray-900 to-black border-b border-gold-500/30 sticky top-0 z-30 shadow-lg">
         <div className="container mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
             {/* Logo */}
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="relative">
@@ -644,7 +664,7 @@ export default function POSPage() {
             </div>
 
             {/* User Info & Clock */}
-            <div className="flex items-center gap-2 sm:gap-4">
+            <div className="ml-auto flex items-center gap-2 sm:gap-4">
               <div className="hidden md:flex flex-col items-end">
                 <p className="text-xs text-gray-400">Operator</p>
                 <p className="text-sm font-medium text-gold-400">{user?.name}</p>
@@ -653,13 +673,22 @@ export default function POSPage() {
                 <Clock className="w-4 h-4 text-gold-400" />
                 <span>{new Date().toLocaleTimeString()}</span>
               </div>
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                size="sm"
+                className="border-gold-500/40 px-2 sm:px-3 text-gold-300 hover:bg-gold-500/15 hover:text-gold-200"
+              >
+                <LogOut className="w-4 h-4 sm:mr-1" />
+                <span className="hidden sm:inline">Logout</span>
+              </Button>
             </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <div className="container mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 pb-24 md:pb-6">
+      <div className="container mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 pb-32 sm:pb-36 md:pb-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Products Section */}
           <div className="lg:col-span-2 space-y-4 sm:space-y-6">
@@ -678,10 +707,10 @@ export default function POSPage() {
                 </div>
 
                 {/* Categories */}
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 overflow-x-auto whitespace-nowrap pb-1">
                   <button
                     onClick={() => setSelectedCategory(null)}
-                    className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                    className={`shrink-0 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                       selectedCategory === null
                         ? "bg-gradient-to-r from-gold-500 to-gold-600 text-black shadow-md"
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -693,7 +722,7 @@ export default function POSPage() {
                     <button
                       key={category}
                       onClick={() => setSelectedCategory(category)}
-                      className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                      className={`shrink-0 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                         selectedCategory === category
                           ? "bg-gradient-to-r from-gold-500 to-gold-600 text-black shadow-md"
                           : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -1006,11 +1035,43 @@ export default function POSPage() {
                 )}
               </CardContent>
             </Card>
+
+            <Card className="border-2 border-slate-200 shadow-lg">
+              <CardHeader className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100">
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <Clock className="w-5 h-5 text-gold-500" />
+                  <span>Recent History</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-2 max-h-72 overflow-y-auto">
+                {salesHistory.length === 0 ? (
+                  <p className="text-sm text-slate-500">No transactions yet.</p>
+                ) : (
+                  salesHistory.map((sale: any) => (
+                    <div
+                      key={sale.id}
+                      className="rounded-lg border border-slate-200 p-3 bg-white flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0 w-full sm:w-auto">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{sale.id}</p>
+                        <p className="text-xs text-slate-500">
+                          {new Date(sale.sale_date || sale.date).toLocaleString()} • {sale.items_count || 0} item(s)
+                        </p>
+                      </div>
+                      <div className="text-left sm:text-right w-full sm:w-auto">
+                        <p className="text-sm font-bold text-gold-600">₱{Number(sale.total_amount || 0).toFixed(2)}</p>
+                        <p className="text-[11px] text-slate-500 uppercase">{sale.payment_method || "cash"}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
 
         {/* Floating Mobile Cart Button */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-gradient-to-r from-black via-gray-900 to-black border-t border-gold-500/30 p-3 sm:p-4 shadow-lg z-40">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-gradient-to-r from-black via-gray-900 to-black border-t border-gold-500/30 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-lg z-40">
           <button
             onClick={() => {
               // Scroll to cart section
@@ -1086,7 +1147,7 @@ export default function POSPage() {
       {/* Payment Modal */}
       {showPayment && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md shadow-2xl animate-in fade-in zoom-in duration-200 border-gold-500/30">
+          <Card className="w-full max-w-md max-h-[90dvh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in duration-200 border-gold-500/30">
             <CardHeader className="border-b border-gold-500/20 bg-gradient-to-r from-gold-500/10 to-gold-600/10">
               <CardTitle className="text-lg sm:text-xl flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-gold-600" />
@@ -1168,7 +1229,7 @@ export default function POSPage() {
       {/* Gcash Reference Form Modal */}
       {showGcashForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md shadow-2xl animate-in fade-in zoom-in duration-200 border-blue-500/30">
+          <Card className="w-full max-w-md max-h-[90dvh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in duration-200 border-blue-500/30">
             <CardHeader className="border-b border-blue-500/20 bg-gradient-to-r from-blue-500/10 to-blue-600/10">
               <CardTitle className="text-lg sm:text-xl flex items-center gap-2">
                 <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-white text-sm font-bold">G</div>

@@ -1,3 +1,774 @@
+import bcrypt from "bcryptjs";
+import dns from "dns";
+import { Pool, PoolClient, QueryResult, QueryResultRow, types } from "pg";
+
+types.setTypeParser(1700, (value) => (value === null ? null : Number(value)));
+types.setTypeParser(20, (value) => (value === null ? null : Number(value)));
+
+type QueryValue = string | number | boolean | null | Date | Buffer | QueryValue[] | Record<string, unknown>;
+
+type QueryResultHeader = {
+  affectedRows: number;
+  changedRows?: number;
+  insertId?: string | number | null;
+};
+
+type QueryResponse<T extends QueryResultRow = any> = [T[] | QueryResultHeader, QueryResult<T>];
+
+let pool: Pool | null = null;
+let publicDnsFallbackPool: Pool | null = null;
+
+function getConnectionString() {
+  return (
+    process.env.SUPABASE_POOLER_URL ||
+    process.env.SUPABASE_DATABASE_URL ||
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.PGURL ||
+    process.env.DB_URL ||
+    ""
+  ).trim();
+}
+
+function shouldUseSsl() {
+  const explicit = String(process.env.DATABASE_SSL || process.env.PGSSLMODE || "").toLowerCase();
+  if (explicit === "disable" || explicit === "false" || explicit === "0") return false;
+  return Boolean(getConnectionString() || String(process.env.DB_HOST || "").includes("supabase"));
+}
+
+function getDatabaseName() {
+  return process.env.DB_NAME || "frozenhub_pos";
+}
+
+function isSupabaseDataProviderEnabled() {
+  return String(process.env.DATA_PROVIDER || "supabase").toLowerCase() !== "none";
+}
+
+function getPoolConfig() {
+  const connectionString = getConnectionString();
+  if (connectionString) {
+    return {
+      connectionString,
+      max: 10,
+      idleTimeoutMillis: 10_000,
+      connectionTimeoutMillis: 10_000,
+      ssl: shouldUseSsl() ? { rejectUnauthorized: false } : undefined,
+    };
+  }
+
+  if (isSupabaseDataProviderEnabled()) {
+    throw new Error("Missing Supabase database connection string. Set DATABASE_URL or SUPABASE_DATABASE_URL in your environment.");
+  }
+
+  const host = process.env.DB_HOST || "localhost";
+  const port = Number(process.env.DB_PORT || 5432);
+  const user = process.env.DB_USER || "postgres";
+  const password = process.env.DB_PASSWORD || "";
+  const database = process.env.DB_NAME || "postgres";
+
+  return {
+    host,
+    port: Number.isFinite(port) ? port : 5432,
+    user,
+    password,
+    database,
+    max: 10,
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 10_000,
+    ssl: shouldUseSsl() ? { rejectUnauthorized: false } : undefined,
+  };
+}
+
+function isDnsResolutionError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const code = String((error as any).code || "");
+  const message = error.message.toLowerCase();
+  return code === "ENOTFOUND" || message.includes("enotfound");
+}
+
+function isIpv6UnreachableError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const code = String((error as any).code || "");
+  const address = String((error as any).address || "");
+  return code === "ENETUNREACH" && address.includes(":");
+}
+
+function normalizeConnectivityError(error: unknown) {
+  if (isIpv6UnreachableError(error)) {
+    const normalized = new Error(
+      "Supabase direct DB host resolved to IPv6 but this network cannot reach IPv6. Use the Supabase pooler connection string in SUPABASE_POOLER_URL (or DATABASE_URL)."
+    ) as Error & { code?: string };
+    // Preserve a network-style code so higher-level fallback logic can recognize this as connectivity-related.
+    normalized.code = "ENETUNREACH";
+    return normalized;
+  }
+  return error;
+}
+
+async function resolveHostWithPublicDns(host: string) {
+  const resolver = new dns.promises.Resolver();
+  resolver.setServers(["8.8.8.8", "1.1.1.1"]);
+
+  try {
+    const ipv4 = await resolver.resolve4(host);
+    if (ipv4.length > 0) return ipv4[0];
+  } catch {
+    // Ignore and attempt IPv6 next.
+  }
+
+  try {
+    const ipv6 = await resolver.resolve6(host);
+    if (ipv6.length > 0) return ipv6[0];
+  } catch {
+    // Ignore and return null below.
+  }
+
+  return null;
+}
+
+async function getPublicDnsFallbackPool() {
+  if (publicDnsFallbackPool) return publicDnsFallbackPool;
+
+  const connectionString = getConnectionString();
+  if (!connectionString) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(connectionString);
+  } catch {
+    return null;
+  }
+
+  const hostname = parsed.hostname;
+  if (!hostname) return null;
+
+  const resolvedHost = await resolveHostWithPublicDns(hostname);
+  if (!resolvedHost) return null;
+
+  const database = decodeURIComponent(parsed.pathname.replace(/^\//, "") || "postgres");
+  const user = decodeURIComponent(parsed.username || "postgres");
+  const password = decodeURIComponent(parsed.password || "");
+  const port = Number(parsed.port || 5432);
+
+  publicDnsFallbackPool = new Pool({
+    host: resolvedHost,
+    port: Number.isFinite(port) ? port : 5432,
+    user,
+    password,
+    database,
+    max: 10,
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 10_000,
+    ssl: shouldUseSsl() ? { rejectUnauthorized: false, servername: hostname } : undefined,
+  });
+
+  return publicDnsFallbackPool;
+}
+
+export function getPool(): Pool {
+  if (!pool) {
+    pool = new Pool(getPoolConfig());
+  }
+  return pool;
+}
+
+function normalizeDateFormat(format: string) {
+  const mapping: Record<string, string> = {
+    "%b %d": "Mon DD",
+    "%Y-%m-%d": "YYYY-MM-DD",
+    "%Y-%m": "YYYY-MM",
+    "%Y-%m-%d %H:%i": "YYYY-MM-DD HH24:MI",
+  };
+  return mapping[format] || "YYYY-MM-DD";
+}
+
+function normalizeJsonExtract(sql: string) {
+  return sql.replace(
+    /JSON_UNQUOTE\(JSON_EXTRACT\(([^,]+),\s*'\$\.([^']+)'\)\)/gi,
+    (_match, expression: string, path: string) => {
+      const pathParts = String(path)
+        .split(".")
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join(",");
+      return `(((${expression.trim()})::jsonb) #>> '{${pathParts}}')`;
+    }
+  );
+}
+
+function normalizeSql(sql: string, values: QueryValue[] = []) {
+  let text = String(sql).trim();
+
+  text = text.replace(/`/g, '"');
+  text = text.replace(/\bDATABASE\(\)/gi, "current_schema()");
+  text = text.replace(/\bIFNULL\(/gi, "COALESCE(");
+  text = text.replace(/DATE_FORMAT\(([^,]+),\s*'([^']+)'\)/gi, (_match, expression: string, format: string) => {
+    return `TO_CHAR(${expression.trim()}, '${normalizeDateFormat(format)}')`;
+  });
+  text = normalizeJsonExtract(text);
+
+  let index = 0;
+  text = text.replace(/\?/g, () => `$${++index}`);
+
+  return { text, values };
+}
+
+function buildShowColumnsResult(tableName: string, columnName: string) {
+  const columnTypes: Record<string, Record<string, string>> = {
+    sales: {
+      payment_status: "enum('pending','succeeded','failed')",
+      status: "enum('pending','preparing','ready','picked_up','out_for_delivery','completed','cancelled')",
+      customer_info: "jsonb",
+      notes: "text",
+      assigned_rider_id: "text",
+      picked_up_at: "timestamp",
+      delivered_at: "timestamp",
+    },
+    purchases: {
+      status: "enum('received','pending','cancelled')",
+    },
+  };
+
+  const type = columnTypes[tableName]?.[columnName];
+  if (!type) return [];
+
+  return [
+    {
+      Field: columnName,
+      Type: type,
+      Null: "YES",
+      Key: "",
+      Default: null,
+      Extra: "",
+    },
+  ];
+}
+
+function buildShowIndexResult(tableName: string, keyName: string) {
+  const knownIndexes: Record<string, Set<string>> = {
+    products: new Set(["idx_barcode"]),
+  };
+
+  if (!knownIndexes[tableName]?.has(keyName)) return [];
+  return [{ Table: tableName, Key_name: keyName }];
+}
+
+function normalizePgError(error: unknown) {
+  const err = error as any;
+  const code = String(err?.code || "");
+  const message = String(err?.message || "");
+
+  if (code === "23505") {
+    const duplicate = new Error(`Duplicate entry: ${message}`) as Error & { code?: string };
+    duplicate.code = "ER_DUP_ENTRY";
+    return duplicate;
+  }
+
+  if (code === "23503") {
+    const fkError = new Error(`Cannot delete or update a parent row: a foreign key constraint fails (${message})`) as Error & {
+      code?: string;
+    };
+    fkError.code = "ER_ROW_IS_REFERENCED_2";
+    return fkError;
+  }
+
+  return error;
+}
+
+function formatQueryResult<T extends QueryResultRow>(sql: string, result: QueryResult<T>): QueryResponse<T> {
+  const trimmed = sql.trim().toLowerCase();
+  if (trimmed.startsWith("select") || trimmed.startsWith("with") || trimmed.startsWith("show")) {
+    return [result.rows, result];
+  }
+
+  const firstRow = result.rows?.[0] || null;
+  const header: QueryResultHeader = {
+    affectedRows: result.rowCount ?? 0,
+    changedRows: result.rowCount ?? 0,
+    insertId: firstRow && typeof firstRow === "object" && "id" in firstRow ? (firstRow as any).id : null,
+  };
+
+  return [header, result];
+}
+
+class PgConnection {
+  private client: PoolClient | null = null;
+  private transactionActive = false;
+
+  constructor(private readonly pool: Pool) {}
+
+  private async getClient() {
+    if (this.client) return this.client;
+    this.client = await this.pool.connect();
+    return this.client;
+  }
+
+  async query<T extends QueryResultRow = any>(sql: string, values: QueryValue[] = []): Promise<QueryResponse<T>> {
+    const normalized = normalizeSql(sql, values);
+
+    if (normalized.text.toLowerCase().startsWith("show columns from")) {
+      const match = normalized.text.match(/^show\s+columns\s+from\s+"?([\w-]+)"?\s+like\s+(.+)$/i);
+      if (match) {
+        const tableName = match[1].replace(/"/g, "");
+        const likeValue = String(values[0] ?? match[2]).replace(/^'|'$/g, "").replace(/^\$/g, "");
+        return [buildShowColumnsResult(tableName, likeValue) as any, { rows: [] as any[], rowCount: 0 } as QueryResult<T>];
+      }
+    }
+
+    if (normalized.text.toLowerCase().startsWith("show tables like")) {
+      const tableName = String(values[0] ?? "").replace(/^'|'$/g, "");
+      return [[tableName ? { table_name: tableName } : []].flat() as any, { rows: [] as any[], rowCount: 0 } as QueryResult<T>];
+    }
+
+    if (normalized.text.toLowerCase().startsWith("show index from")) {
+      const match = normalized.text.match(/^show\s+index\s+from\s+"?([\w-]+)"?\s+where\s+key_name\s*=\s*'([^']+)'/i);
+      if (match) {
+        const tableName = match[1].replace(/"/g, "");
+        const keyName = match[2];
+        return [buildShowIndexResult(tableName, keyName) as any, { rows: [] as any[], rowCount: 0 } as QueryResult<T>];
+      }
+    }
+
+    try {
+      const runner = this.client ?? this.pool;
+      const result = await runner.query(normalized.text, normalized.values as any[]);
+      return formatQueryResult<T>(sql, result);
+    } catch (error) {
+      if (!this.client && isDnsResolutionError(error)) {
+        const fallbackPool = await getPublicDnsFallbackPool();
+        if (fallbackPool) {
+          try {
+            const result = await fallbackPool.query(normalized.text, normalized.values as any[]);
+            return formatQueryResult<T>(sql, result);
+          } catch (fallbackError) {
+            throw normalizePgError(normalizeConnectivityError(fallbackError));
+          }
+        }
+      }
+
+      throw normalizePgError(normalizeConnectivityError(error));
+    }
+  }
+
+  async beginTransaction() {
+    const client = await this.getClient();
+    await client.query("BEGIN");
+    this.transactionActive = true;
+  }
+
+  async commit() {
+    if (!this.client || !this.transactionActive) return;
+    await this.client.query("COMMIT");
+    this.transactionActive = false;
+  }
+
+  async rollback() {
+    if (!this.client || !this.transactionActive) return;
+    await this.client.query("ROLLBACK");
+    this.transactionActive = false;
+  }
+
+  release() {
+    if (this.client) {
+      this.client.release();
+      this.client = null;
+      this.transactionActive = false;
+    }
+  }
+}
+
+export async function getConnection() {
+  return new PgConnection(getPool());
+}
+
+async function executeStatements(connection: PgConnection, statements: string[]) {
+  for (const statement of statements) {
+    await connection.query(statement);
+  }
+}
+
+async function ensureSchema(connection: PgConnection) {
+  await executeStatements(connection, [
+    `CREATE TABLE IF NOT EXISTS branches (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      location TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      manager TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      phone TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('admin', 'branch_admin', 'pos_operator', 'customer', 'rider')),
+      branch_id TEXT NULL REFERENCES branches(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS categories (
+      id TEXT PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      description TEXT,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS products (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      sku TEXT UNIQUE NOT NULL,
+      barcode TEXT UNIQUE NOT NULL,
+      category TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      price NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      cost NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      image TEXT NOT NULL DEFAULT '/placeholder.svg',
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS inventory (
+      id TEXT PRIMARY KEY,
+      product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+      quantity INTEGER NOT NULL DEFAULT 0,
+      reorder_level INTEGER NOT NULL DEFAULT 50,
+      last_stock_check TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT unique_product_branch UNIQUE (product_id, branch_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS pricing (
+      id TEXT PRIMARY KEY,
+      product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      base_price NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      wholesale_price NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      retail_price NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      distributor_price NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      markup NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      effective_from TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      effective_to TIMESTAMPTZ NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS sales (
+      id TEXT PRIMARY KEY,
+      date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE RESTRICT,
+      total_amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      items_count INTEGER NOT NULL DEFAULT 0,
+      payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'card', 'gcash', 'paymaya', 'bank_transfer', 'online')),
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'preparing', 'ready', 'picked_up', 'out_for_delivery', 'completed', 'cancelled')),
+      created_by TEXT NULL REFERENCES users(id) ON DELETE SET NULL,
+      assigned_rider_id TEXT NULL REFERENCES users(id) ON DELETE SET NULL,
+      customer_info JSONB NULL,
+      notes TEXT NULL,
+      payment_status TEXT NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'succeeded', 'failed')),
+      picked_up_at TIMESTAMPTZ NULL,
+      delivered_at TIMESTAMPTZ NULL,
+      subtotal NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      discount_amount NUMERIC(10, 2) NOT NULL DEFAULT 0
+    )`,
+    `CREATE TABLE IF NOT EXISTS sale_items (
+      id TEXT PRIMARY KEY,
+      sale_id TEXT NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      price NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      total NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      subtotal NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      discount_amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      promo_id TEXT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS settings (
+      id TEXT PRIMARY KEY,
+      setting_key TEXT UNIQUE NOT NULL,
+      setting_value TEXT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_by TEXT NULL REFERENCES users(id) ON DELETE SET NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS stock_transfer_logs (
+      id TEXT PRIMARY KEY,
+      transfer_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      product_name TEXT NOT NULL,
+      from_branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+      from_branch_name TEXT NOT NULL,
+      to_branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+      to_branch_name TEXT NOT NULL,
+      quantity INTEGER NOT NULL,
+      reason TEXT NULL,
+      approved_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      approved_by_name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'completed' CHECK (status IN ('completed', 'failed')),
+      notes TEXT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS promos (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NULL,
+      discount_type TEXT NOT NULL CHECK (discount_type IN ('percentage', 'fixed')),
+      discount_value NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      min_purchase NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      max_discount NUMERIC(10, 2) NULL,
+      start_date TIMESTAMPTZ NOT NULL,
+      end_date TIMESTAMPTZ NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_by TEXT NULL REFERENCES users(id) ON DELETE SET NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS product_promos (
+      id TEXT PRIMARY KEY,
+      promo_id TEXT NOT NULL REFERENCES promos(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT unique_promo_product UNIQUE (promo_id, product_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS carts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS cart_items (
+      id TEXT PRIMARY KEY,
+      cart_id TEXT NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT unique_cart_product UNIQUE (cart_id, product_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS activity_logs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_name TEXT NOT NULL,
+      user_role TEXT NOT NULL CHECK (user_role IN ('admin', 'branch_admin', 'pos_operator', 'customer', 'rider')),
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NULL,
+      entity_name TEXT NULL,
+      description TEXT NULL,
+      metadata JSONB NULL,
+      ip_address TEXT NULL,
+      branch_id TEXT NULL REFERENCES branches(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS rider_branch_assignments (
+      id TEXT PRIMARY KEY,
+      rider_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+      assigned_by TEXT NULL REFERENCES users(id) ON DELETE SET NULL,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT uniq_rider_assignment UNIQUE (rider_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS delivery_history (
+      id TEXT PRIMARY KEY,
+      sale_id TEXT NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+      rider_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+      customer_name TEXT NULL,
+      customer_phone TEXT NULL,
+      customer_address TEXT NULL,
+      total_amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      payment_status TEXT NULL,
+      picked_up_at TIMESTAMPTZ NULL,
+      delivered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT uniq_delivery_sale UNIQUE (sale_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS suppliers (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      contact_person TEXT NULL,
+      phone TEXT NULL,
+      email TEXT NULL,
+      address TEXT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS purchases (
+      id TEXT PRIMARY KEY,
+      supplier_id TEXT NULL REFERENCES suppliers(id) ON DELETE SET NULL,
+      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+      invoice_number TEXT NULL,
+      purchase_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      total_amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'received' CHECK (status IN ('received', 'pending', 'cancelled')),
+      notes TEXT NULL,
+      created_by TEXT NULL REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS purchase_items (
+      id TEXT PRIMARY KEY,
+      purchase_id TEXT NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      cost NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      total NUMERIC(10, 2) NOT NULL DEFAULT 0
+    )`,
+  ]);
+
+  await executeStatements(connection, [
+    `CREATE INDEX IF NOT EXISTS idx_users_branch_id ON users(branch_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)`,
+    `CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_branches_name ON branches(name)`,
+    `CREATE INDEX IF NOT EXISTS idx_categories_name ON categories(name)`,
+    `CREATE INDEX IF NOT EXISTS idx_categories_active ON categories(active)`,
+    `CREATE INDEX IF NOT EXISTS idx_products_name ON products(name)`,
+    `CREATE INDEX IF NOT EXISTS idx_products_active ON products(active)`,
+    `CREATE INDEX IF NOT EXISTS idx_products_price ON products(price)`,
+    `CREATE INDEX IF NOT EXISTS idx_products_category ON products(category)`,
+    `CREATE INDEX IF NOT EXISTS idx_products_created_at ON products(created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_inventory_branch_id ON inventory(branch_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_inventory_product_id ON inventory(product_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_inventory_quantity ON inventory(quantity)`,
+    `CREATE INDEX IF NOT EXISTS idx_inventory_branch_quantity ON inventory(branch_id, quantity)`,
+    `CREATE INDEX IF NOT EXISTS idx_inventory_last_check ON inventory(last_stock_check)`,
+    `CREATE INDEX IF NOT EXISTS idx_pricing_product_id ON pricing(product_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_pricing_effective_from ON pricing(effective_from)`,
+    `CREATE INDEX IF NOT EXISTS idx_pricing_effective_to ON pricing(effective_to)`,
+    `CREATE INDEX IF NOT EXISTS idx_sales_branch_id ON sales(branch_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(date DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_sales_status ON sales(status)`,
+    `CREATE INDEX IF NOT EXISTS idx_sales_payment_method ON sales(payment_method)`,
+    `CREATE INDEX IF NOT EXISTS idx_sales_created_by ON sales(created_by)`,
+    `CREATE INDEX IF NOT EXISTS idx_sales_assigned_rider ON sales(assigned_rider_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_sale_items_product_id ON sale_items(product_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(setting_key)`,
+    `CREATE INDEX IF NOT EXISTS idx_transfer_date ON stock_transfer_logs(transfer_date)`,
+    `CREATE INDEX IF NOT EXISTS idx_transfer_product ON stock_transfer_logs(product_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_transfer_from_branch ON stock_transfer_logs(from_branch_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_transfer_to_branch ON stock_transfer_logs(to_branch_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_promos_active ON promos(active)`,
+    `CREATE INDEX IF NOT EXISTS idx_promos_dates ON promos(start_date, end_date)`,
+    `CREATE INDEX IF NOT EXISTS idx_product_promos_promo ON product_promos(promo_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_product_promos_product ON product_promos(product_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_carts_user ON carts(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_cart_items_cart ON cart_items(cart_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_cart_items_product ON cart_items(product_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_logs(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_activity_action ON activity_logs(action)`,
+    `CREATE INDEX IF NOT EXISTS idx_activity_entity ON activity_logs(entity_type, entity_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_activity_branch ON activity_logs(branch_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_activity_created_at ON activity_logs(created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_rider_branch_branch ON rider_branch_assignments(branch_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_rider_branch_active ON rider_branch_assignments(active)`,
+    `CREATE INDEX IF NOT EXISTS idx_delivery_rider ON delivery_history(rider_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_delivery_branch ON delivery_history(branch_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_delivery_delivered_at ON delivery_history(delivered_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers(name)`,
+    `CREATE INDEX IF NOT EXISTS idx_purchases_date ON purchases(purchase_date)`,
+    `CREATE INDEX IF NOT EXISTS idx_purchases_branch ON purchases(branch_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_purchases_supplier ON purchases(supplier_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase ON purchase_items(purchase_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_purchase_items_product ON purchase_items(product_id)`,
+  ]);
+}
+
+export async function initializeDatabase() {
+  const connection = await getConnection();
+
+  try {
+    await ensureSchema(connection);
+    console.log("✅ Supabase/Postgres schema initialized");
+  } finally {
+    connection.release();
+  }
+}
+
+function serializeRows(rows: any[]) {
+  return rows.map((row) => ({
+    ...row,
+    id: row?.id ?? null,
+  }));
+}
+
+export async function seedDatabase() {
+  const connection = await getConnection();
+
+  try {
+    const [categoriesRows] = await connection.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM categories");
+    const categoryCount = Number((categoriesRows as any[])[0]?.count || 0);
+
+    if (categoryCount > 0) {
+      console.log("⏭️  Database already seeded");
+      return;
+    }
+
+    console.log("🌱 Seeding database...");
+
+    const categories = [
+      ["cat-001", "Meat", "Fresh frozen meat products", true],
+      ["cat-002", "Seafood", "Fresh frozen seafood products", true],
+      ["cat-003", "Vegetables", "Fresh frozen vegetables", true],
+      ["cat-004", "Fruits", "Fresh frozen fruits and berries", true],
+    ];
+
+    for (const [id, name, description, active] of categories) {
+      await connection.query(
+        `INSERT INTO categories (id, name, description, active, created_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (id) DO NOTHING`,
+        [id, name, description, active]
+      );
+    }
+
+    const adminUser = {
+      id: "user-admin-001",
+      name: "System Administrator",
+      email: "admin@gmail.com",
+      phone: "+1-555-0001",
+      password: "admin123",
+      role: "admin",
+      branch_id: null,
+    };
+
+    const passwordHash = await bcrypt.hash(adminUser.password, 10);
+    await connection.query(
+      `INSERT INTO users (id, name, email, phone, password_hash, role, branch_id, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+       ON CONFLICT (id) DO NOTHING`,
+      [adminUser.id, adminUser.name, adminUser.email, adminUser.phone, passwordHash, adminUser.role, adminUser.branch_id]
+    );
+
+    const defaultSettings = [
+      ["cms-001", "hero_banner", "/placeholder.svg"],
+      ["cms-002", "hero_title", "Premium Frozen Foods"],
+      ["cms-003", "hero_subtitle", "Quality You Can Trust"],
+      ["cms-004", "hero_description", "Quality frozen products delivered to your door. Browse our extensive catalog of meats, seafood, vegetables, and ready-to-eat meals."],
+      ["cms-005", "about_title", "About Batangas Premium Bongabong"],
+      ["cms-006", "about_description", "At Batangas Premium Bongabong, we've been delivering premium quality frozen products to Filipino families and businesses since our establishment. Our commitment to excellence and customer satisfaction has made us a trusted name in the frozen foods industry."],
+      ["cms-007", "about_mission", "To provide the highest quality frozen products while maintaining exceptional service and competitive pricing."],
+      ["cms-008", "about_values", "Quality, Trust, Service, Innovation"],
+      ["cms-009", "company_name", "Batangas Premium Bongabong"],
+      ["cms-010", "company_logo", null],
+      ["cms-011", "featured_bg_type", "color"],
+      ["cms-012", "featured_bg_color", "#ffffff"],
+      ["cms-013", "featured_bg_image", null],
+    ];
+
+    for (const [id, key, value] of defaultSettings) {
+      await connection.query(
+        `INSERT INTO settings (id, setting_key, setting_value, updated_at, updated_by)
+         VALUES ($1, $2, $3, NOW(), NULL)
+         ON CONFLICT (setting_key) DO UPDATE
+         SET setting_value = EXCLUDED.setting_value,
+             updated_at = NOW(),
+             updated_by = EXCLUDED.updated_by`,
+        [id, key, value]
+      );
+    }
+
+    console.log("✅ Seed data created successfully");
+  } catch (error) {
+    console.error("Error seeding database:", error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+/*
 import mysql from "mysql2/promise";
 import bcrypt from "bcryptjs";
 
@@ -823,3 +1594,4 @@ export async function seedDatabase() {
     connection.release();
   }
 }
+*/

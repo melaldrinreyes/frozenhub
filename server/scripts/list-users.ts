@@ -1,21 +1,11 @@
-import { createPool } from "mysql2/promise";
+import { getConnection } from "../db";
 import * as dotenv from "dotenv";
 
 // Load environment variables
 dotenv.config();
 
-const pool = createPool({
-  host: process.env.DB_HOST || "localhost",
-  user: process.env.DB_USER || "root",
-  password: process.env.DB_PASSWORD || "",
-  database: process.env.DB_NAME || "frozenhub_pos",
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-});
-
 async function listUsers() {
-  const connection = await pool.getConnection();
+  const connection = await getConnection();
   
   try {
     console.log("\n👥 Users in Database:\n");
@@ -73,7 +63,6 @@ async function listUsers() {
     throw error;
   } finally {
     connection.release();
-    await pool.end();
   }
 }
 

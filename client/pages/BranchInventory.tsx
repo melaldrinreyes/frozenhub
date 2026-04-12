@@ -189,6 +189,14 @@ export default function BranchInventory() {
     return { label: "Adequate", color: "green" };
   };
 
+  const getProgressWidthClass = (percentage: number) => {
+    if (!Number.isFinite(percentage) || percentage <= 0) return "w-0";
+    if (percentage <= 25) return "w-1/4";
+    if (percentage <= 50) return "w-1/2";
+    if (percentage <= 75) return "w-3/4";
+    return "w-full";
+  };
+
   if (isLoading) {
     return (
       <AdminLayout userRole="branch">
@@ -405,7 +413,7 @@ export default function BranchInventory() {
                           <div className="flex items-center justify-center gap-2">
                             <div className="w-20 bg-slate-200 rounded-full h-2">
                               <div
-                                className={`h-2 rounded-full ${
+                                className={`${getProgressWidthClass(percentage)} h-2 rounded-full ${
                                   percentage === 0
                                     ? "bg-red-500"
                                     : percentage <= 50
@@ -414,9 +422,6 @@ export default function BranchInventory() {
                                         ? "bg-yellow-500"
                                         : "bg-green-500"
                                 }`}
-                                style={{
-                                  width: `${Math.min(percentage, 100)}%`,
-                                }}
                               />
                             </div>
                             <span
@@ -589,7 +594,7 @@ export default function BranchInventory() {
                       <div className="mb-3">
                         <div className="w-full bg-slate-200 rounded-full h-2">
                           <div
-                            className={`h-2 rounded-full ${
+                            className={`${getProgressWidthClass(percentage)} h-2 rounded-full ${
                               percentage === 0
                                 ? "bg-red-500"
                                 : percentage <= 50
@@ -598,9 +603,6 @@ export default function BranchInventory() {
                                     ? "bg-yellow-500"
                                     : "bg-green-500"
                             }`}
-                            style={{
-                              width: `${Math.min(percentage, 100)}%`,
-                            }}
                           />
                         </div>
                       </div>

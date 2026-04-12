@@ -12,7 +12,19 @@ interface ApiError {
   message?: string;
 }
 
-const DB_UNAVAILABLE_MESSAGE = "The MySQL database is not currently reachable.";
+const DB_UNAVAILABLE_MESSAGE = "The database backend is not currently reachable.";
+
+function isInfrastructureDbMessage(message: string) {
+  const normalized = String(message || "").toLowerCase();
+  return normalized.includes("database backend unavailable") ||
+    normalized.includes("database backend is not currently reachable") ||
+    normalized.includes("supabase direct db host resolved to ipv6") ||
+    normalized.includes("cannot reach ipv6") ||
+    normalized.includes("enotfound") ||
+    normalized.includes("enetunreach") ||
+    normalized.includes("econnrefused") ||
+    normalized.includes("database is not currently reachable");
+}
 
 const FALLBACK_SETTING_MAP: Record<string, any> = {
   hero_banner: null,
@@ -60,7 +72,7 @@ const FALLBACK_SETTING_KEYS = Object.keys(FALLBACK_SETTING_MAP);
 function isDatabaseUnavailable(error: unknown) {
   if (!(error instanceof Error)) return false;
   const statusCode = Number((error as any).status || 0);
-  return statusCode === 503 || error.message === DB_UNAVAILABLE_MESSAGE;
+  return statusCode === 503 || isInfrastructureDbMessage(error.message) || error.message === DB_UNAVAILABLE_MESSAGE;
 }
 
 function buildFallbackSettings() {
@@ -97,7 +109,8 @@ class ApiClient {
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-        const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}`;
+        const rawErrorMessage = errorData.message || errorData.error || `HTTP ${response.status}`;
+        const errorMessage = isInfrastructureDbMessage(rawErrorMessage) ? DB_UNAVAILABLE_MESSAGE : rawErrorMessage;
         
         // Log unauthorized errors except suppressed auth-check calls
         if (response.status === 401 && !suppressAuthErrors) {

@@ -2,7 +2,6 @@ import { ReactNode, useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/authContext";
 import {
-  Home,
   ShoppingBag,
   Package,
   ShoppingCart,
@@ -140,16 +139,6 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
             {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center gap-8">
               <button
-                onClick={() => navigate("/customer/home")}
-                className={`text-sm font-medium transition-colors ${
-                  isActive("/customer/home")
-                    ? "text-gold-400"
-                    : "text-gray-300 hover:text-gold-400"
-                }`}
-              >
-                Home
-              </button>
-              <button
                 onClick={() => navigate("/customer/shop")}
                 className={`text-sm font-medium transition-colors ${
                   isActive("/customer/shop")
@@ -215,18 +204,7 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
 
       {/* Bottom Navigation - Mobile Only */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-black border-t border-gold-500/20 z-50 shadow-lg">
-        <div className="grid grid-cols-5 h-16">
-          <button
-            onClick={() => navigate("/customer/home")}
-            className={`flex flex-col items-center justify-center gap-1 transition-all ${
-              isActive("/customer/home")
-                ? "text-gold-400 bg-gold-500/10"
-                : "text-gray-400 hover:text-gold-400 hover:bg-gold-500/5"
-            }`}
-          >
-            <Home className="w-5 h-5" />
-            <span className="text-xs font-medium">Home</span>
-          </button>
+        <div className="grid grid-cols-4 h-16">
 
           <button
             onClick={() => navigate("/customer/shop")}
