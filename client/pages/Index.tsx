@@ -6,8 +6,6 @@ import { DiscountBadge, PriceDisplay, SaleBanner } from "@/components/DiscountBa
 import {
   Snowflake,
   ShoppingCart,
-  LogIn,
-  LogOut,
   Star,
   Shield,
   Clock,
@@ -55,6 +53,7 @@ export default function Index() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [activeNavItem, setActiveNavItem] = useState("home");
   const { user, isAuthenticated, logout } = useAuth();
+  const hasActiveSession = Boolean(isAuthenticated && user?.id);
   const heroSectionRef = useRef<HTMLElement | null>(null);
   const promoSectionRef = useRef<HTMLElement | null>(null);
   const featuredSectionRef = useRef<HTMLElement | null>(null);
@@ -581,15 +580,7 @@ export default function Index() {
 
             {/* Actions */}
             <div className="flex items-center gap-2 sm:gap-3">
-              <button
-                className="p-2 text-gold-400 hover:text-gold-300 transition-colors"
-                aria-label="Open cart"
-                title="Open cart"
-                type="button"
-              >
-                <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-              {isAuthenticated ? (
+              {hasActiveSession ? (
                 <Button
                   onClick={handleLogout}
                   size="sm"
@@ -603,7 +594,7 @@ export default function Index() {
                   size="sm"
                   className="bg-gold-500 hover:bg-gold-600 text-black font-medium px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
                 >
-                  <span>Sign In</span>
+                  <span>Login</span>
                 </Button>
               )}
             </div>
