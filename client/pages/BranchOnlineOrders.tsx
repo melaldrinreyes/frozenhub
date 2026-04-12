@@ -103,7 +103,10 @@ export default function BranchOnlineOrders() {
       const result = await apiClient.getSales(
         user?.branch_id,
         startDate.toISOString().split('T')[0],
-        new Date().toISOString().split('T')[0]
+        new Date().toISOString().split('T')[0],
+        1,
+        100,
+        "all"
       );
       
       console.log("🛒 All Sales:", result);
