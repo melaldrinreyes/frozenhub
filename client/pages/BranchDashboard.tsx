@@ -100,6 +100,28 @@ function buildTrendDateRange(range: TrendRange, customStart: string, customEnd: 
   };
 }
 
+function summarizeTrendData(trendData: any[]) {
+  const totals = trendData.reduce(
+    (accumulator, entry) => {
+      const sales = Number(entry?.sales || 0);
+      const orders = Number(entry?.orders || 0);
+
+      accumulator.totalRevenue += sales;
+      accumulator.totalSales += orders;
+      return accumulator;
+    },
+    { totalRevenue: 0, totalSales: 0 }
+  );
+
+  const averageOrderValue = totals.totalSales > 0 ? totals.totalRevenue / totals.totalSales : 0;
+
+  return {
+    totalRevenue: totals.totalRevenue,
+    totalSales: totals.totalSales,
+    avgOrderValue: averageOrderValue,
+  };
+}
+
 export default function BranchDashboard() {
   const [activeTab, setActiveTab] = useState<"dashboard" | "pos">("dashboard");
   const [trendRange, setTrendRange] = useState<TrendRange>("all");
@@ -145,11 +167,15 @@ export default function BranchDashboard() {
     enabled: !!user && user.role === "branch_admin",
   });
 
-  // Fetch all-time sales statistics for the summary cards
+  // Fetch sales statistics for the same range used by the dashboard view
   const { data: salesStats, isLoading: isLoadingStats } = useQuery({
-    queryKey: ["dashboard-sales-stats", user?.branch_id],
+    queryKey: ["dashboard-sales-stats", user?.branch_id, trendDateRange.startDate, trendDateRange.endDate],
     queryFn: async () => {
-      return apiClient.getSalesStats(user?.branch_id || undefined);
+      return apiClient.getSalesStats(
+        user?.branch_id || undefined,
+        trendDateRange.startDate,
+        trendDateRange.endDate
+      );
     },
     enabled: !!user && user.role === "branch_admin",
   });
@@ -223,6 +249,7 @@ export default function BranchDashboard() {
   const recentOrders = recentSalesData?.sales || [];
 
   const dashboardData = salesTrendData?.trend || [];
+  const dashboardSummary = salesStats || summarizeTrendData(dashboardData);
 
   // Helper to normalize/parse sale_date from various API shapes
   const getOrderDate = (order: any): Date => {
@@ -383,26 +410,26 @@ export default function BranchDashboard() {
             <Card className="hover:shadow-md transition-shadow bg-white">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Sales (All Time)
+                  Sales ({trendDateRange.label})
                 </CardTitle>
                 <DollarSign className="w-4 h-4 text-secondary" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">₱{(salesStats?.totalRevenue || 0).toLocaleString()}</div>
-                <p className="text-xs text-slate-600">All branch sales</p>
+                <div className="text-2xl font-bold">₱{(dashboardSummary?.totalRevenue || 0).toLocaleString()}</div>
+                <p className="text-xs text-slate-600">Branch revenue for the selected range</p>
               </CardContent>
             </Card>
 
             <Card className="hover:shadow-md transition-shadow bg-white">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Orders (All Time)
+                  Orders ({trendDateRange.label})
                 </CardTitle>
                 <ShoppingCart className="w-4 h-4 text-accent" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{salesStats?.totalSales || 0}</div>
-                <p className="text-xs text-slate-600">All completed orders</p>
+                <div className="text-2xl font-bold">{dashboardSummary?.totalSales || 0}</div>
+                <p className="text-xs text-slate-600">Completed orders for the selected range</p>
               </CardContent>
             </Card>
 
@@ -414,8 +441,8 @@ export default function BranchDashboard() {
               <TrendingUp className="w-4 h-4 text-gold-500/60" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">₱{(salesStats?.avgOrderValue || 0).toLocaleString()}</div>
-              <p className="text-xs text-slate-600">Average across all orders</p>
+              <div className="text-2xl font-bold">₱{(dashboardSummary?.avgOrderValue || 0).toLocaleString()}</div>
+              <p className="text-xs text-slate-600">Average across the selected range</p>
             </CardContent>
           </Card>
           </div>
