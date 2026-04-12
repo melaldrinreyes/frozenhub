@@ -1209,6 +1209,20 @@ export const handleAssignRiderBranchMySQL: RequestHandler = async (req, res) => 
       [id]
     );
 
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "ASSIGN_RIDER_BRANCH",
+      entityType: "user",
+      entityId: id,
+      entityName: user?.id || id,
+      description: `Rider assigned to branch ${branchId}`,
+      metadata: { branchId },
+      ipAddress: req.ip || null,
+      branchId: String(branchId),
+    });
+
     res.json({ user: (rows as any[])[0], message: "Rider assigned successfully" });
   } catch (error: any) {
     console.error("MySQL assign rider branch error:", error);
@@ -1245,6 +1259,19 @@ export const handleChangePasswordMySQL: RequestHandler = async (req, res) => {
 
     const passwordHash = await bcrypt.hash(String(newPassword), BCRYPT_ROUNDS);
     await connection.query("UPDATE users SET password_hash = ? WHERE id = ?", [passwordHash, userId]);
+    await logActivity(connection, {
+      userId,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "CHANGE_PASSWORD",
+      entityType: "auth",
+      entityId: userId,
+      entityName: req.user?.name || userId,
+      description: "Password changed",
+      metadata: {},
+      ipAddress: req.ip || null,
+      branchId: req.user?.branch_id || null,
+    });
     res.json({ message: "Password updated successfully" });
   } catch (error) {
     console.error("MySQL change password error:", error);
@@ -1262,18 +1289,21 @@ export const handleGetSaleItemsMySQL: RequestHandler = async (req, res) => {
   try {
     connection = await getConnection();
 
+    const [saleRows] = await connection.query(
+      `SELECT id, branch_id, total_amount, items_count, payment_method, status, notes, created_at
+       FROM sales
+       WHERE id = ?
+       LIMIT 1`,
+      [id]
+    );
+    const sale = (saleRows as any[])[0];
+
+    if (!sale) {
+      res.status(404).json({ error: "Sale not found" });
+      return;
+    }
+
     if ((requesterRole === "branch_admin" || requesterRole === "rider") && requesterBranchId) {
-      const [saleRows] = await connection.query(
-        "SELECT branch_id FROM sales WHERE id = ? LIMIT 1",
-        [id]
-      );
-
-      const sale = (saleRows as any[])[0];
-      if (!sale) {
-        res.status(404).json({ error: "Sale not found" });
-        return;
-      }
-
       if (String(sale.branch_id) !== String(requesterBranchId)) {
         res.status(403).json({ error: "Access denied for this order" });
         return;
@@ -1291,7 +1321,32 @@ export const handleGetSaleItemsMySQL: RequestHandler = async (req, res) => {
       [id]
     );
 
-    res.json({ items: rows });
+    const items = rows as any[];
+    if (items.length === 0) {
+      res.json({
+        items: [
+          {
+            id: `legacy-${sale.id}`,
+            sale_id: sale.id,
+            product_id: null,
+            product_name: "Legacy order summary",
+            sku: null,
+            image: null,
+            quantity: Number(sale.items_count || 0) || 1,
+            price: Number(sale.total_amount || 0),
+            total: Number(sale.total_amount || 0),
+            subtotal: Number(sale.total_amount || 0),
+            discount_amount: 0,
+            promo_id: null,
+            legacy: true,
+          },
+        ],
+        legacy: true,
+      });
+      return;
+    }
+
+    res.json({ items });
   } catch (error) {
     console.error("MySQL get sale items error:", error);
     res.json({ items: [] });
@@ -1879,6 +1934,20 @@ export const handleAssignRiderMySQL: RequestHandler = async (req, res) => {
        WHERE id = ?`,
       [riderId, id]
     );
+
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "ASSIGN_RIDER",
+      entityType: "sale",
+      entityId: id,
+      entityName: `Order #${id}`,
+      description: `Rider ${rider.name} assigned to order`,
+      metadata: { riderId: rider.id, riderName: rider.name },
+      ipAddress: req.ip || null,
+      branchId: sale.branch_id || null,
+    });
 
     res.json({ message: "Rider assigned successfully", rider: { id: rider.id, name: rider.name } });
   } catch (error) {
