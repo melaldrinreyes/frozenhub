@@ -187,6 +187,14 @@ const App = () => (
               path="/branch/online-orders"
               element={
                 <ProtectedRoute allowedRoles={["branch_admin"]}>
+                  <BranchOnlineOrders />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/branch/audit-logs"
+              element={
+                <ProtectedRoute allowedRoles={["branch_admin"]}>
                   <AuditLogs />
                 </ProtectedRoute>
               }
