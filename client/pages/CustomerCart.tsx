@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/authContext";
 import { CustomerLayout } from "@/components/CustomerLayout";
+import LoginModal from "@/components/LoginModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -86,6 +87,7 @@ export default function CustomerCart() {
   const queryClient = useQueryClient();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCheckoutDialog, setShowCheckoutDialog] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cod"); // Online orders use Cash on Delivery
   const [customerName, setCustomerName] = useState("");
@@ -204,6 +206,16 @@ export default function CustomerCart() {
   };
 
   const handleCheckout = () => {
+    if (!user) {
+      toast({
+        title: "Login required",
+        description: "Please login to continue checkout.",
+        variant: "destructive",
+      });
+      setShowLoginModal(true);
+      return;
+    }
+
     if (cart.length === 0) {
       toast({
         title: "Cart is empty",
@@ -700,6 +712,8 @@ export default function CustomerCart() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
     </div>
     </CustomerLayout>
   );

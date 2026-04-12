@@ -2,11 +2,12 @@ import { ReactNode, useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/authContext";
 import { confirmLogout } from "@/lib/logout";
+import LoginModal from "@/components/LoginModal";
 import {
   ShoppingBag,
   Package,
   ShoppingCart,
-  User,
+  LogIn,
   LogOut,
   Snowflake,
 } from "lucide-react";
@@ -27,6 +28,7 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [cartItemCount, setCartItemCount] = useState(0);
   const [activeOrdersCount, setActiveOrdersCount] = useState(0);
 
@@ -151,7 +153,13 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
                 Shop
               </button>
               <button
-                onClick={() => navigate("/customer/orders")}
+                onClick={() => {
+                  if (!user) {
+                    setShowLoginModal(true);
+                    return;
+                  }
+                  navigate("/customer/orders");
+                }}
                 className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
                   isActive("/customer/orders")
                     ? "bg-gold-500/15 text-gold-300 shadow-sm"
@@ -190,12 +198,22 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
 
             {/* User Menu */}
             <div className="flex items-center gap-3">
-              <button
-                onClick={handleLogout}
-                className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-medium shadow-md hover:shadow-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-              >
-                <span>Logout</span>
-              </button>
+              {user ? (
+                <button
+                  onClick={handleLogout}
+                  className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-medium shadow-md hover:shadow-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                >
+                  <span>Logout</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowLoginModal(true)}
+                  className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-600 hover:to-gold-700 text-black font-medium shadow-md hover:shadow-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Login</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -221,7 +239,13 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
           </button>
 
           <button
-            onClick={() => navigate("/customer/orders")}
+            onClick={() => {
+              if (!user) {
+                setShowLoginModal(true);
+                return;
+              }
+              navigate("/customer/orders");
+            }}
             className={`flex flex-col items-center justify-center gap-1 transition-all duration-200 relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-400/70 ${
               isActive("/customer/orders")
                 ? "text-gold-300 bg-gold-500/15"
@@ -264,14 +288,27 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
             <span className="text-xs font-medium">Cart</span>
           </button>
 
-          <button
-            onClick={handleLogout}
-            className="flex flex-col items-center justify-center gap-1 transition-all text-red-400 hover:text-red-300 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-300/70"
-          >
-            <span className="text-xs font-medium">Logout</span>
-          </button>
+          {user ? (
+            <button
+              onClick={handleLogout}
+              className="flex flex-col items-center justify-center gap-1 transition-all text-red-400 hover:text-red-300 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-300/70"
+            >
+              <LogOut className="w-5 h-5" />
+              <span className="text-xs font-medium">Logout</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowLoginModal(true)}
+              className="flex flex-col items-center justify-center gap-1 transition-all text-gold-300 hover:text-gold-200 hover:bg-gold-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-300/70"
+            >
+              <LogIn className="w-5 h-5" />
+              <span className="text-xs font-medium">Login</span>
+            </button>
+          )}
         </div>
       </nav>
+
+      {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
     </div>
   );
 }

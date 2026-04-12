@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +49,7 @@ const adjustBrightness = (hex: string, percent: number) => {
 };
 
 export default function Index() {
+  const navigate = useNavigate();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [activeNavItem, setActiveNavItem] = useState("home");
   const heroSectionRef = useRef<HTMLElement | null>(null);
@@ -825,7 +827,7 @@ export default function Index() {
                   ? "border-gold-400 text-gold-400 hover:bg-gold-400/10 bg-black/30" 
                   : "border-gold-500 text-gold-600 hover:bg-gold-50"
               }`}
-              onClick={() => setShowLoginModal(true)}
+              onClick={() => navigate("/customer/shop")}
             >
               View All
             </Button>
@@ -981,7 +983,7 @@ export default function Index() {
             <Button
               variant="outline"
               className="w-full sm:w-auto border-gold-500 text-gold-600 hover:bg-gold-50"
-              onClick={() => setShowLoginModal(true)}
+              onClick={() => navigate("/customer/shop")}
             >
               View All Products
             </Button>
