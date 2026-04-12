@@ -151,6 +151,45 @@ function getDevFallbackAdmin(): AuthUser {
   };
 }
 
+type GoogleTokenInfo = {
+  aud?: string;
+  email?: string;
+  email_verified?: string | boolean;
+  family_name?: string;
+  given_name?: string;
+  name?: string;
+  picture?: string;
+  sub?: string;
+};
+
+function isGoogleEmailVerified(value: string | boolean | undefined): boolean {
+  return value === true || String(value || "").toLowerCase() === "true";
+}
+
+function getGoogleDisplayName(googleUser: GoogleTokenInfo, email: string): string {
+  const fullName = String(googleUser.name || "").trim();
+  if (fullName) return fullName;
+
+  const composedName = [googleUser.given_name, googleUser.family_name]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(" ");
+
+  if (composedName) return composedName;
+
+  return email.split("@")[0] || "Google User";
+}
+
+async function verifyGoogleIdentityToken(idToken: string): Promise<GoogleTokenInfo> {
+  const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    throw new Error(details || "Invalid Google credential");
+  }
+
+  return response.json() as Promise<GoogleTokenInfo>;
+}
+
 export const handleLoginMySQL: RequestHandler = async (req, res) => {
   const { email, password, username, identifier } = req.body;
   const loginIdentifier = String(identifier || username || email || "").trim();
@@ -348,6 +387,130 @@ export const handleSignupMySQL: RequestHandler = async (req, res) => {
   } catch (error) {
     logSqlProviderError("Supabase/Postgres signup error:", error);
     res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection?.release();
+  }
+};
+
+export const handleGoogleAuthMySQL: RequestHandler = async (req, res) => {
+  const { credential } = req.body || {};
+  const googleClientId = String(process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || "").trim();
+
+  if (!credential) {
+    res.status(400).json({ error: "Google credential is required" });
+    return;
+  }
+
+  if (!googleClientId) {
+    res.status(500).json({ error: "Google client ID is not configured" });
+    return;
+  }
+
+  let connection;
+  try {
+    const googleUser = await verifyGoogleIdentityToken(String(credential));
+    const email = String(googleUser.email || "").trim().toLowerCase();
+
+    if (!googleUser.sub || !email) {
+      res.status(401).json({ error: "Invalid Google account data" });
+      return;
+    }
+
+    if (String(googleUser.aud || "") !== googleClientId) {
+      res.status(401).json({ error: "Google account audience mismatch" });
+      return;
+    }
+
+    if (!isGoogleEmailVerified(googleUser.email_verified)) {
+      res.status(403).json({ error: "Google email must be verified" });
+      return;
+    }
+
+    connection = await getConnection();
+    const [existingRows] = await connection.query(
+      "SELECT id, name, email, phone, role, branch_id, created_at FROM users WHERE email = ? LIMIT 1",
+      [email]
+    );
+    const existingUser = (existingRows as any[])[0] || null;
+
+    if (existingUser && existingUser.role !== "customer") {
+      res.status(403).json({
+        error: "This Google account is already linked to a non-customer role",
+        message: "Please sign in with the account method assigned to your role.",
+      });
+      return;
+    }
+
+    const isNewCustomer = !existingUser;
+    let authUser: AuthUser;
+    let createdUserId = String(existingUser?.id || "");
+
+    if (existingUser) {
+      authUser = {
+        id: existingUser.id,
+        name: existingUser.name,
+        email: existingUser.email,
+        phone: existingUser.phone,
+        role: existingUser.role,
+        branch_id: existingUser.branch_id || null,
+        created_at: existingUser.created_at ? new Date(existingUser.created_at).toISOString() : new Date().toISOString(),
+        google_id: googleUser.sub,
+      };
+    } else {
+      createdUserId = `user-customer-${Date.now()}`;
+      const passwordHash = await bcrypt.hash(`google:${googleUser.sub}:${email}:${Date.now()}`, BCRYPT_ROUNDS);
+      const displayName = getGoogleDisplayName(googleUser, email);
+      const phone = "";
+
+      await connection.query(
+        `INSERT INTO users (id, name, email, phone, password_hash, role, branch_id, created_at)
+         VALUES (?, ?, ?, ?, ?, 'customer', NULL, NOW())`,
+        [createdUserId, displayName, email, phone, passwordHash]
+      );
+
+      authUser = {
+        id: createdUserId,
+        name: displayName,
+        email,
+        phone,
+        role: "customer",
+        branch_id: null,
+        created_at: new Date().toISOString(),
+        google_id: googleUser.sub,
+      };
+    }
+
+    req.session.userId = authUser.id;
+    req.session.userRole = authUser.role;
+    req.session.user = authUser;
+
+    const token = generateToken(authUser);
+
+    await logActivity(connection, {
+      userId: authUser.id,
+      userName: authUser.name,
+      userRole: authUser.role,
+      action: isNewCustomer ? "USER_SIGNUP" : "USER_LOGIN",
+      entityType: "auth",
+      entityId: authUser.id,
+      entityName: authUser.name,
+      description: isNewCustomer ? "Customer account created with Google" : "Customer signed in with Google",
+      metadata: {
+        login_method: "google",
+        provider: "google",
+        google_id: googleUser.sub,
+        account_created: isNewCustomer,
+      },
+      ipAddress: req.ip || null,
+      branchId: null,
+    });
+
+    res.status(isNewCustomer ? 201 : 200).json({ user: authUser, token });
+  } catch (error) {
+    logSqlProviderError("Google auth error:", error);
+    res.status(401).json({
+      error: error instanceof Error ? error.message : "Google sign-in failed",
+    });
   } finally {
     connection?.release();
   }

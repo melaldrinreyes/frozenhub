@@ -178,6 +178,19 @@ class ApiClient {
     return response;
   }
 
+  async googleSignup(credential: string) {
+    const response = await this.request<{ user: any; token?: string }>("/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ credential }),
+    });
+
+    if (response.token && typeof window !== "undefined") {
+      localStorage.setItem(JWT_TOKEN_KEY, response.token);
+    }
+
+    return response;
+  }
+
   async logout() {
     // Clear JWT token from localStorage
     if (typeof window !== "undefined") {

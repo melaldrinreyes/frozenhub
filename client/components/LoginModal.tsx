@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/authContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,12 +11,31 @@ interface LoginModalProps {
   onClose: () => void;
 }
 
+declare global {
+  interface Window {
+    google?: {
+      accounts?: {
+        id?: {
+          initialize: (config: {
+            client_id: string;
+            callback: (response: { credential?: string }) => void;
+          }) => void;
+          renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
+        };
+      };
+    };
+  }
+}
+
 export default function LoginModal({ onClose }: LoginModalProps) {
   const [tab, setTab] = useState<"signin" | "signup">("signin");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
-  const { login, signup } = useAuth();
+  const { login, signup, googleSignup } = useAuth();
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
   // Sign-in form
   const [signInData, setSignInData] = useState({
@@ -102,6 +121,70 @@ export default function LoginModal({ onClose }: LoginModalProps) {
     }
   };
 
+  useEffect(() => {
+    if (!googleClientId || !googleButtonRef.current) return;
+
+    let cancelled = false;
+
+    const renderGoogleButton = () => {
+      if (cancelled || !googleButtonRef.current || !window.google?.accounts?.id) return;
+
+      googleButtonRef.current.innerHTML = "";
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: async (response) => {
+          const credential = response.credential;
+          if (!credential) {
+            setError("Google sign-in failed. Please try again.");
+            return;
+          }
+
+          setError("");
+          setGoogleLoading(true);
+          try {
+            const user = await googleSignup(credential);
+            if (user) {
+              navigate("/customer/shop");
+              onClose();
+            }
+          } catch (err: any) {
+            const errorMessage = err?.message || "Google sign-in failed. Please try again.";
+            setError(errorMessage);
+          } finally {
+            setGoogleLoading(false);
+          }
+        },
+      });
+
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: "outline",
+        size: "large",
+        shape: "pill",
+        text: "continue_with",
+        width: 352,
+      });
+    };
+
+    const existingScript = document.querySelector<HTMLScriptElement>("script[data-google-identity='true']");
+    if (window.google?.accounts?.id) {
+      renderGoogleButton();
+    } else if (!existingScript) {
+      const script = document.createElement("script");
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.dataset.googleIdentity = "true";
+      script.onload = () => renderGoogleButton();
+      document.head.appendChild(script);
+    } else {
+      existingScript.addEventListener("load", renderGoogleButton, { once: true });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [googleClientId, googleSignup, navigate, onClose]);
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <Card className="w-full max-w-md">
@@ -155,6 +238,18 @@ export default function LoginModal({ onClose }: LoginModalProps) {
           </div>
 
           <div className="text-xs uppercase text-slate-500 text-center">Continue with email</div>
+
+          {googleClientId && (
+            <div className="space-y-2">
+              <div ref={googleButtonRef} className="flex justify-center" />
+              <p className="text-xs text-center text-slate-500">
+                Google sign-in creates or opens a customer account automatically.
+              </p>
+              {googleLoading && (
+                <p className="text-xs text-center text-slate-500">Signing in with Google...</p>
+              )}
+            </div>
+          )}
 
           {/* Error Message */}
           {error && (

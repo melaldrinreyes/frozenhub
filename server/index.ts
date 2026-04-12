@@ -138,6 +138,7 @@ import {
 import {
   handleLoginMySQL,
   handleSignupMySQL,
+  handleGoogleAuthMySQL,
   handleGetProductsMySQL,
   handleGetProductMySQL,
   handleGetBranchesMySQL,
@@ -443,6 +444,7 @@ export function createServer() {
   // Auth routes with specific rate limiters and timing attack prevention
   app.post("/api/auth/login", loginRateLimiter, preventTimingAttacks, runtimeDataProvider === "supabase" ? handleLoginMySQL : handleLogin);
   app.post("/api/auth/signup", signupRateLimiter, preventTimingAttacks, runtimeDataProvider === "supabase" ? handleSignupMySQL : handleSignup);
+  app.post("/api/auth/google", signupRateLimiter, preventTimingAttacks, runtimeDataProvider === "supabase" ? handleGoogleAuthMySQL : handleGoogleAuthMySQL);
   app.post("/api/auth/logout", handleLogout);
   app.get("/api/auth/me", handleGetMe);
   

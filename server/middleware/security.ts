@@ -15,14 +15,14 @@ export const helmetConfig = helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "blob:"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "blob:", "https://accounts.google.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "blob:", "https:"],
-      connectSrc: ["'self'", "ws:", "wss:"], // Allow WebSocket for Vite HMR
+      connectSrc: ["'self'", "ws:", "wss:", "https://oauth2.googleapis.com", "https://accounts.google.com"], // Allow WebSocket for Vite HMR and Google auth
       fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
+      frameSrc: ["'none'", "https://accounts.google.com", "https://*.gstatic.com"],
       workerSrc: ["'self'", "blob:"], // Allow web workers from blob URLs (Vite)
     },
   },
