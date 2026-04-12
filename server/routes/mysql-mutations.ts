@@ -16,6 +16,23 @@ function toNumber(value: any, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function buildAutoSku(name: string) {
+  const normalized = String(name || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s-]/g, "")
+    .trim();
+
+  const slug = normalized
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 3)
+    .join("-")
+    .slice(0, 18);
+
+  const timeSuffix = Date.now().toString().slice(-6);
+  return `${slug || "SKU"}-${timeSuffix}`;
+}
+
 function normalizeRole(role: any) {
   const allowed = new Set(["admin", "branch_admin", "pos_operator", "customer", "rider"]);
   if (typeof role === "string" && allowed.has(role)) return role;
@@ -186,8 +203,8 @@ async function ensureProcurementTables(connection: any) {
 export const handleCreateProductMySQL: RequestHandler = async (req, res) => {
   const { name, sku, barcode, category, description, price, cost, image, active } = req.body || {};
 
-  if (!name || !sku || !category) {
-    res.status(400).json({ error: "name, sku, and category are required" });
+  if (!name || !category) {
+    res.status(400).json({ error: "name and category are required" });
     return;
   }
 
@@ -198,6 +215,26 @@ export const handleCreateProductMySQL: RequestHandler = async (req, res) => {
   try {
     connection = await getConnection();
 
+    let resolvedSku = String(sku || "").trim();
+    if (!resolvedSku) {
+      // Generate SKU automatically when not provided by the client.
+      resolvedSku = buildAutoSku(String(name));
+    }
+
+    // Ensure SKU uniqueness even when auto-generated.
+    let suffix = 1;
+    while (true) {
+      const [existingSkuRows] = await connection.query(
+        "SELECT id FROM products WHERE sku = ? LIMIT 1",
+        [resolvedSku]
+      );
+      if ((existingSkuRows as any[]).length === 0) {
+        break;
+      }
+      resolvedSku = `${buildAutoSku(String(name))}-${suffix}`;
+      suffix += 1;
+    }
+
     await connection.query(
       `INSERT INTO products (
         id, name, sku, barcode, category, description, price, cost, image, active, created_at
@@ -205,7 +242,7 @@ export const handleCreateProductMySQL: RequestHandler = async (req, res) => {
       [
         id,
         String(name).trim(),
-        String(sku).trim(),
+        resolvedSku,
         String(safeBarcode).trim(),
         String(category).trim(),
         description ? String(description) : "",
@@ -227,11 +264,11 @@ export const handleCreateProductMySQL: RequestHandler = async (req, res) => {
       entityId: id,
       entityName: createdProduct?.name || String(name),
       description: `Product ${String(name)} created`,
-      metadata: { sku, barcode: safeBarcode, category, price: toNumber(price, 0) },
+      metadata: { sku: resolvedSku, barcode: safeBarcode, category, price: toNumber(price, 0) },
       ipAddress: req.ip || null,
       branchId: req.user?.branch_id || null,
     });
-    res.status(201).json({ product: (rows as any[])[0] });
+    res.status(201).json({ product: (rows as any[])[0], generatedSKU: resolvedSku });
   } catch (error: any) {
     console.error("MySQL create product error:", error);
     if (String(error?.message || "").includes("Duplicate entry")) {
