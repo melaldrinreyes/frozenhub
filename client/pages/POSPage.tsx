@@ -763,6 +763,12 @@ export default function POSPage() {
                 const discountAmount = hasPromo
                   ? getDiscountAmount(product.price, product.promo, potentialSubtotal)
                   : 0;
+                const hasRenderableImage =
+                  typeof product.image === "string" &&
+                  (product.image.startsWith("/") ||
+                    product.image.startsWith("http://") ||
+                    product.image.startsWith("https://") ||
+                    product.image.startsWith("data:image/"));
                 
                 return (
                   <Card
@@ -783,7 +789,7 @@ export default function POSPage() {
                     )}
                     <CardContent className="p-3 sm:p-4 flex flex-col h-full">
                       <div className="w-full aspect-square bg-gradient-to-br from-primary/5 to-primary/10 rounded-xl overflow-hidden mb-3 relative">
-                        {product.image && product.image.startsWith('/') ? (
+                        {hasRenderableImage ? (
                           <img 
                             src={product.image} 
                             alt={product.name}
@@ -796,7 +802,7 @@ export default function POSPage() {
                           />
                         ) : null}
                         <div 
-                          className={`w-full h-full items-center justify-center text-5xl sm:text-6xl ${product.image && product.image.startsWith('/') ? 'hidden' : 'flex'}`}
+                          className={`w-full h-full items-center justify-center text-5xl sm:text-6xl ${hasRenderableImage ? 'hidden' : 'flex'}`}
                         >
                           📦
                         </div>

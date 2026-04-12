@@ -21,7 +21,7 @@ function ensureUploadDirs() {
 }
 
 // Configure multer storage for products
-const storage = multer.diskStorage({
+const diskStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     ensureUploadDirs(); // Create directories on demand
     cb(null, uploadsDir);
@@ -32,6 +32,10 @@ const storage = multer.diskStorage({
     cb(null, `product-${uniqueSuffix}${ext}`);
   },
 });
+
+// In serverless runtimes, local filesystem is ephemeral.
+// Use memory storage and return a data URL so product images remain viewable.
+const storage = isServerless ? multer.memoryStorage() : diskStorage;
 
 // File filter to accept only images
 const fileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
@@ -82,6 +86,17 @@ export const handleUploadProductImage: RequestHandler = (req, res) => {
   try {
     if (!req.file) {
       res.status(400).json({ error: "No file uploaded" });
+      return;
+    }
+
+    if (isServerless && req.file.buffer) {
+      const mimeType = req.file.mimetype || "image/jpeg";
+      const base64 = req.file.buffer.toString("base64");
+      const imagePath = `data:${mimeType};base64,${base64}`;
+      res.json({
+        message: "File uploaded successfully",
+        imagePath,
+      });
       return;
     }
 
