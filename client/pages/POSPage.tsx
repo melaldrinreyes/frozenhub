@@ -28,6 +28,20 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { getDiscountedPrice, getDiscountAmount } from "@/lib/discountUtils";
 
+const JWT_TOKEN_KEY = "frozenhub_jwt_token";
+
+function withAuth(init: RequestInit = {}): RequestInit {
+  const token = typeof window !== "undefined" ? localStorage.getItem(JWT_TOKEN_KEY) : null;
+  return {
+    ...init,
+    headers: {
+      ...(init.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    credentials: "include",
+  };
+}
+
 interface CartItem {
   id: string;
   productId: string;
@@ -210,7 +224,7 @@ export default function POSPage() {
     try {
       const branchId = user?.branch_id;
       if (!branchId) throw new Error("No branch ID");
-      const resp = await fetch(`/api/products?branchId=${branchId}`);
+      const resp = await fetch(`/api/products?branchId=${branchId}`, withAuth());
       if (resp.ok) {
         const data = await resp.json();
         const serverProducts = data.products || [];
@@ -305,7 +319,7 @@ export default function POSPage() {
     queryFn: async () => {
       const branchId = user?.branch_id;
       if (!branchId) throw new Error("No branch ID");
-      const response = await fetch(`/api/products?branchId=${branchId}`);
+      const response = await fetch(`/api/products?branchId=${branchId}`, withAuth());
       if (!response.ok) throw new Error("Failed to fetch products");
       return response.json();
     },
@@ -316,7 +330,7 @@ export default function POSPage() {
   const { data: promosData } = useQuery({
     queryKey: ["activePromos"],
     queryFn: async () => {
-      const response = await fetch("/api/promos/active");
+      const response = await fetch("/api/promos/active", withAuth());
       if (!response.ok) throw new Error("Failed to fetch promos");
       return response.json();
     },
@@ -328,7 +342,7 @@ export default function POSPage() {
   const { data: inventoryData } = useQuery({
     queryKey: ["inventory", user?.branch_id],
     queryFn: async () => {
-      const response = await fetch(`/api/inventory?branchId=${user?.branch_id}`);
+      const response = await fetch(`/api/inventory?branchId=${user?.branch_id}`, withAuth());
       if (!response.ok) throw new Error("Failed to fetch inventory");
       return response.json();
     },
@@ -339,7 +353,7 @@ export default function POSPage() {
     queryKey: ["sales", "pos-history", user?.branch_id],
     queryFn: async () => {
       if (!user?.branch_id) return { sales: [] };
-      const response = await fetch(`/api/sales?branchId=${user.branch_id}&page=1&limit=10`);
+      const response = await fetch(`/api/sales?branchId=${user.branch_id}&page=1&limit=10`, withAuth());
       if (!response.ok) {
         throw new Error("Failed to fetch sales history");
       }
@@ -352,11 +366,11 @@ export default function POSPage() {
   // Create sale mutation
   const createSaleMutation = useMutation({
     mutationFn: async (saleData: any) => {
-      const response = await fetch("/api/sales", {
+      const response = await fetch("/api/sales", withAuth({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(saleData),
-      });
+      }));
       
       if (!response.ok) {
         const error = await response.json();
