@@ -1290,7 +1290,7 @@ export const handleGetSaleItemsMySQL: RequestHandler = async (req, res) => {
     connection = await getConnection();
 
     const [saleRows] = await connection.query(
-      `SELECT id, branch_id, total_amount, items_count, payment_method, status, notes, created_at
+      `SELECT id, branch_id, total_amount, items_count, payment_method, status, notes, date as created_at
        FROM sales
        WHERE id = ?
        LIMIT 1`,
@@ -1303,7 +1303,7 @@ export const handleGetSaleItemsMySQL: RequestHandler = async (req, res) => {
       return;
     }
 
-    if ((requesterRole === "branch_admin" || requesterRole === "rider") && requesterBranchId) {
+    if ((requesterRole === "branch_admin" || requesterRole === "pos_operator" || requesterRole === "rider") && requesterBranchId) {
       if (String(sale.branch_id) !== String(requesterBranchId)) {
         res.status(403).json({ error: "Access denied for this order" });
         return;

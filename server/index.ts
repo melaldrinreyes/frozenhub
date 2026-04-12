@@ -481,7 +481,7 @@ export function createServer() {
   app.get("/api/rider/delivery-history", requireAuth, requireRole("rider"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetRiderDeliveryHistoryMySQL : handleGetSales);
   app.get("/api/sales/stats", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetSalesStatsMySQL : handleGetSalesStats);
   app.get("/api/sales/trend", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetSalesTrendMySQL : handleGetSalesTrend);
-  app.get("/api/sales/:id/items", requireAuth, requireRole("admin", "branch_admin", "customer", "rider"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetSaleItemsMySQL : handleGetSaleItems);
+  app.get("/api/sales/:id/items", requireAuth, requireRole("admin", "branch_admin", "pos_operator", "customer", "rider"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetSaleItemsMySQL : handleGetSaleItems);
   app.patch("/api/sales/:id/status", requireAuth, requireRole("admin", "branch_admin", "rider"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleUpdateOrderStatusMySQL : handleUpdateOrderStatus);
   app.patch("/api/sales/:id/assign-rider", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleAssignRiderMySQL : handleUpdateOrderStatus);
   app.post("/api/sales", requireAuth, requireRole("admin", "branch_admin", "pos_operator"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleCreateSaleMySQL : handleCreateSale);
