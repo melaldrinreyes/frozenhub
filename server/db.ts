@@ -36,10 +36,6 @@ function shouldUseSsl() {
   return Boolean(getConnectionString() || String(process.env.DB_HOST || "").includes("supabase"));
 }
 
-function getDatabaseName() {
-  return process.env.DB_NAME || "frozenhub_pos";
-}
-
 function isSupabaseDataProviderEnabled() {
   return String(process.env.DATA_PROVIDER || "supabase").toLowerCase() !== "none";
 }
@@ -695,13 +691,6 @@ export async function initializeDatabase() {
   } finally {
     connection.release();
   }
-}
-
-function serializeRows(rows: any[]) {
-  return rows.map((row) => ({
-    ...row,
-    id: row?.id ?? null,
-  }));
 }
 
 export async function seedDatabase() {

@@ -1,37 +1,6 @@
 import { RequestHandler } from "express";
-import bcrypt from "bcryptjs";
-import { AuthUser } from "../middleware/auth";
 import { disabledRoute } from "./disabled-data";
-import { 
-  regenerateSession, 
-  cleanupSessionTracking
-} from "../middleware/sessionSecurity";
-
-// Enhanced bcrypt rounds for better security (12 rounds - good balance)
-const BCRYPT_ROUNDS = 12;
-
-// Password strength validation
-function validatePassword(password: string): { valid: boolean; message?: string } {
-  if (password.length < 8) {
-    return { valid: false, message: "Password must be at least 8 characters long" };
-  }
-  if (!/[A-Z]/.test(password)) {
-    return { valid: false, message: "Password must contain at least one uppercase letter" };
-  }
-  if (!/[a-z]/.test(password)) {
-    return { valid: false, message: "Password must contain at least one lowercase letter" };
-  }
-  if (!/[0-9]/.test(password)) {
-    return { valid: false, message: "Password must contain at least one number" };
-  }
-  return { valid: true };
-}
-
-// Email validation
-function validateEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-}
+import { cleanupSessionTracking } from "../middleware/sessionSecurity";
 
 // Login endpoint
 export const handleLogin = disabledRoute("handleLogin");

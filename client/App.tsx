@@ -14,7 +14,6 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/AdminDashboard";
 import BranchDashboard from "./pages/BranchDashboard";
-import POSPage from "./pages/POSPage";
 import AdminCatalogs from "./pages/AdminCatalogs";
 import AdminPricing from "./pages/AdminPricing";
 import AdminPromos from "./pages/AdminPromos";
@@ -188,14 +187,6 @@ const App = () => (
               path="/branch/online-orders"
               element={
                 <ProtectedRoute allowedRoles={["branch_admin"]}>
-                  <BranchOnlineOrders />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/branch/audit-logs"
-              element={
-                <ProtectedRoute allowedRoles={["branch_admin"]}>
                   <AuditLogs />
                 </ProtectedRoute>
               }
@@ -205,16 +196,6 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={["branch_admin"]}>
                   <BranchSettings />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* POS Operator Routes */}
-            <Route
-              path="/pos"
-              element={
-                <ProtectedRoute allowedRoles={["pos_operator"]}>
-                  <POSPage />
                 </ProtectedRoute>
               }
             />

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import AdminLayout from "@/components/AdminLayout";
 import { apiClient } from "@/lib/apiClient";
@@ -32,7 +32,6 @@ import {
   Search,
   ShieldAlert,
   Clock3,
-  UserRound,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -115,6 +114,21 @@ export default function AuditLogs() {
   const logs = logsData?.logs || [];
   const pagination = logsData?.pagination;
   const branches = branchesData?.branches || [];
+
+  useEffect(() => {
+    setPage(1);
+  }, [effectiveBranchId, actionFilter, entityFilter, searchText, startDate, endDate, limit]);
+
+  useEffect(() => {
+    if (!pagination) return;
+    if (pagination.pages === 0 && page !== 1) {
+      setPage(1);
+      return;
+    }
+    if (pagination.pages > 0 && page > pagination.pages) {
+      setPage(pagination.pages);
+    }
+  }, [pagination, page]);
 
   const branchNameMap = useMemo(() => {
     return new Map(branches.map((branch: any) => [String(branch.id), branch.name || branch.branch_name || branch.id]));
@@ -258,14 +272,14 @@ export default function AuditLogs() {
             <CardDescription>Filter by branch, action, date range, and keywords.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => setQuickRange("week")}>Last 7 Days</Button>
-              <Button variant="outline" size="sm" onClick={() => setQuickRange("month")}>Last 30 Days</Button>
-              <Button variant="outline" size="sm" onClick={() => setQuickRange("year")}>Last 1 Year</Button>
-              <Button variant="outline" size="sm" onClick={() => setQuickRange("all")}>All Time</Button>
+            <div className="flex flex-wrap gap-1 sm:gap-2">
+              <Button variant="outline" size="sm" onClick={() => setQuickRange("week")} className="text-xs sm:text-sm">Last 7 Days</Button>
+              <Button variant="outline" size="sm" onClick={() => setQuickRange("month")} className="text-xs sm:text-sm">Last 30 Days</Button>
+              <Button variant="outline" size="sm" onClick={() => setQuickRange("year")} className="text-xs sm:text-sm">Last 1 Year</Button>
+              <Button variant="outline" size="sm" onClick={() => setQuickRange("all")} className="text-xs sm:text-sm">All Time</Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {canChooseBranch ? (
                 <div className="space-y-2">
                   <Label>Branch</Label>
@@ -363,9 +377,10 @@ export default function AuditLogs() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 justify-end">
+            <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 justify-end">
               <Button
                 variant="outline"
+                size="sm"
                 onClick={() => {
                   if (canChooseBranch) setBranchFilter("all");
                   setActionFilter("all");
@@ -376,14 +391,15 @@ export default function AuditLogs() {
                   setPage(1);
                   setLimit(50);
                 }}
+                className="w-full sm:w-auto"
               >
                 Clear Filters
               </Button>
-              <Button variant="outline" onClick={handlePrint} disabled={logs.length === 0}>
+              <Button variant="outline" size="sm" onClick={handlePrint} disabled={logs.length === 0} className="w-full sm:w-auto">
                 <Printer className="w-4 h-4 mr-2" />
                 Print
               </Button>
-              <Button onClick={handleExportCSV} disabled={logs.length === 0} className="bg-gold-500 hover:bg-gold-600 text-black">
+              <Button onClick={handleExportCSV} disabled={logs.length === 0} className="bg-gold-500 hover:bg-gold-600 text-black w-full sm:w-auto" size="sm">
                 <Download className="w-4 h-4 mr-2" />
                 Download CSV
               </Button>
@@ -512,28 +528,63 @@ export default function AuditLogs() {
         </Card>
 
         {pagination && pagination.pages > 1 && (
-          <div className="flex items-center justify-between gap-3 print:hidden">
-            <p className="text-sm text-slate-600">
-              Page {pagination.page} of {pagination.pages}
-            </p>
-            <div className="flex items-center gap-2">
+          <div className="print:hidden rounded-lg border border-slate-200 bg-white p-3 sm:p-4 space-y-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-slate-600">
+                <span className="font-semibold text-slate-900">Page {pagination.page}</span> of <span className="font-semibold text-slate-900">{pagination.pages}</span>
+              </div>
+              <div className="text-xs sm:text-sm text-slate-500">
+                {pagination.total.toLocaleString()} total records
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
               <Button
                 variant="outline"
                 size="sm"
                 disabled={page <= 1 || isLoadingLogs}
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
+                className="w-full sm:w-auto"
               >
-                <ChevronLeft className="w-4 h-4 mr-1" />
+                <ChevronLeft className="w-4 h-4 mr-2" />
                 Previous
               </Button>
+
+              <div className="flex items-center gap-1 justify-center flex-wrap">
+                {Array.from({ length: Math.min(pagination.pages <= 5 ? pagination.pages : 5, pagination.pages) }, (_, index) => {
+                  let pageNumber: number;
+                  if (pagination.pages <= 5) {
+                    pageNumber = index + 1;
+                  } else {
+                    const half = 2;
+                    const start = Math.max(1, Math.min(page - half, pagination.pages - 4));
+                    pageNumber = start + index;
+                  }
+                  
+                  return (
+                    <Button
+                      key={pageNumber}
+                      variant={pageNumber === page ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setPage(pageNumber)}
+                      disabled={isLoadingLogs}
+                      className={`h-8 w-8 p-0 ${pageNumber === page ? "bg-gold-500 hover:bg-gold-600 text-black" : ""}`}
+                    >
+                      {pageNumber}
+                    </Button>
+                  );
+                })}
+              </div>
+
               <Button
                 variant="outline"
                 size="sm"
                 disabled={page >= pagination.pages || isLoadingLogs}
-                onClick={() => setPage((current) => current + 1)}
+                onClick={() => setPage((current) => Math.min(pagination.pages, current + 1))}
+                className="w-full sm:w-auto"
               >
                 Next
-                <ChevronRight className="w-4 h-4 ml-1" />
+                <ChevronRight className="w-4 h-4 ml-2" />
               </Button>
             </div>
           </div>

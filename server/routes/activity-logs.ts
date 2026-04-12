@@ -74,6 +74,25 @@ function resolveBranchScope(req: any, requestedBranchId?: string) {
   return req.user?.branch_id || null;
 }
 
+function applyBranchScopeFilter(
+  req: any,
+  resolvedBranchId: string | null,
+  clauses: string[],
+  params: any[],
+  branchColumn: string
+) {
+  if (req.user?.role && req.user.role !== "admin") {
+    clauses.push(`${branchColumn} = ?`);
+    params.push(resolvedBranchId);
+    return;
+  }
+
+  if (req.user?.role === "admin" && resolvedBranchId) {
+    clauses.push(`${branchColumn} = ?`);
+    params.push(resolvedBranchId);
+  }
+}
+
 export const handleGetActivityLogs: RequestHandler = async (req, res) => {
   const connection = await getConnection();
   try {
@@ -97,17 +116,7 @@ export const handleGetActivityLogs: RequestHandler = async (req, res) => {
 
     const clauses: string[] = ["1=1"];
     const params: any[] = [];
-
-    if (req.user?.role === "branch_admin" && resolvedBranchId) {
-      clauses.push("al.branch_id = ?");
-      params.push(resolvedBranchId);
-    } else if (req.user?.role === "admin" && resolvedBranchId) {
-      clauses.push("al.branch_id = ?");
-      params.push(resolvedBranchId);
-    } else if (req.user?.role && req.user.role !== "admin") {
-      clauses.push("al.branch_id = ?");
-      params.push(resolvedBranchId);
-    }
+    applyBranchScopeFilter(req, resolvedBranchId, clauses, params, "al.branch_id");
 
     if (userId) {
       clauses.push("al.user_id = ?");
@@ -190,17 +199,7 @@ export const handleGetActivityStats: RequestHandler = async (req, res) => {
 
     const clauses: string[] = ["1=1"];
     const params: any[] = [];
-
-    if (req.user?.role === "branch_admin" && resolvedBranchId) {
-      clauses.push("branch_id = ?");
-      params.push(resolvedBranchId);
-    } else if (req.user?.role === "admin" && resolvedBranchId) {
-      clauses.push("branch_id = ?");
-      params.push(resolvedBranchId);
-    } else if (req.user?.role && req.user.role !== "admin") {
-      clauses.push("branch_id = ?");
-      params.push(resolvedBranchId);
-    }
+    applyBranchScopeFilter(req, resolvedBranchId, clauses, params, "branch_id");
 
     if (startDate) {
       clauses.push("created_at >= ?");
@@ -260,17 +259,7 @@ export const handleGetRecentActivity: RequestHandler = async (req, res) => {
 
     const clauses: string[] = ["1=1"];
     const params: any[] = [];
-
-    if (req.user?.role === "branch_admin" && resolvedBranchId) {
-      clauses.push("al.branch_id = ?");
-      params.push(resolvedBranchId);
-    } else if (req.user?.role === "admin" && resolvedBranchId) {
-      clauses.push("al.branch_id = ?");
-      params.push(resolvedBranchId);
-    } else if (req.user?.role && req.user.role !== "admin") {
-      clauses.push("al.branch_id = ?");
-      params.push(resolvedBranchId);
-    }
+    applyBranchScopeFilter(req, resolvedBranchId, clauses, params, "al.branch_id");
 
     const [rows] = await connection.query(
       `SELECT al.*, b.name AS branch_name

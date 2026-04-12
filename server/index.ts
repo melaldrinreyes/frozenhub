@@ -212,7 +212,6 @@ let dbInitialized = false;
 let dbInitializing = false;
 let dbInitPromise: Promise<void> | null = null;
 let runtimeDataProvider: "supabase" | "none" = getDataProvider();
-let dbInitErrorMessage: string | null = null;
 let dbInitLastFailureAt = 0;
 const DB_INIT_RETRY_COOLDOWN_MS = 15000;
 
@@ -252,7 +251,6 @@ async function ensureDatabaseInitialized() {
   dbInitPromise = (async () => {
     try {
       runtimeDataProvider = getDataProvider();
-      dbInitErrorMessage = null;
 
       // Only create data directory if not in serverless environment
       const isServerless = process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL;
@@ -301,7 +299,6 @@ async function ensureDatabaseInitialized() {
         console.warn("⚠ Database initialization failed; keeping runtime in retry mode");
       }
 
-      dbInitErrorMessage = error instanceof Error ? error.message : String(error);
       dbInitializing = false;
       dbInitLastFailureAt = Date.now();
     }

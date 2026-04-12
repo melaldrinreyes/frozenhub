@@ -36,7 +36,7 @@ export function storeSessionFingerprint(req: any): void {
  * 
  * DISABLED: Causing issues with OAuth redirect flows
  */
-export const sessionFingerprinting: RequestHandler = (req, res, next) => {
+export const sessionFingerprinting: RequestHandler = (_req, _res, next) => {
   // DISABLED: Skip fingerprinting entirely to fix OAuth login issues
   return next();
   
@@ -174,9 +174,8 @@ export const checkSessionTimeout: RequestHandler = (req, res, next) => {
  * DISABLED: Set to allow unlimited concurrent sessions
  */
 const userSessions = new Map<string, Set<string>>();
-const MAX_SESSIONS_PER_USER = 999; // Effectively unlimited
 
-export const limitConcurrentSessions: RequestHandler = (req, res, next) => {
+export const limitConcurrentSessions: RequestHandler = (_req, _res, next) => {
   // DISABLED: Skip session limiting
   return next();
   

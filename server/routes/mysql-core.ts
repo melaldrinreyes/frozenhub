@@ -649,6 +649,19 @@ export const createPromoMySQL: RequestHandler = async (req, res) => {
     await connection.commit();
 
     const [createdRows] = await connection.query("SELECT * FROM promos WHERE id = ? LIMIT 1", [promoId]);
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "CREATE_PROMO",
+      entityType: "promo",
+      entityId: promoId,
+      entityName: String(name),
+      description: `Promo ${String(name)} created`,
+      metadata: { discount_type, discount_value, min_purchase, max_discount, start_date, end_date, active, product_ids },
+      ipAddress: req.ip || null,
+      branchId: null,
+    });
     res.status(201).json({ promo: (createdRows as any[])[0], message: "Promo created successfully" });
   } catch (error) {
     if (connection) {
@@ -726,6 +739,19 @@ export const updatePromoMySQL: RequestHandler = async (req, res) => {
     await connection.commit();
 
     const [updatedRows] = await connection.query("SELECT * FROM promos WHERE id = ? LIMIT 1", [id]);
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "UPDATE_PROMO",
+      entityType: "promo",
+      entityId: id,
+      entityName: String(name || id),
+      description: `Promo ${String(name || id)} updated`,
+      metadata: { discount_type, discount_value, min_purchase, max_discount, start_date, end_date, active, product_ids },
+      ipAddress: req.ip || null,
+      branchId: null,
+    });
     res.json({ promo: (updatedRows as any[])[0], message: "Promo updated successfully" });
   } catch (error) {
     if (connection) {
@@ -756,6 +782,20 @@ export const deletePromoMySQL: RequestHandler = async (req, res) => {
       return;
     }
 
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "DELETE_PROMO",
+      entityType: "promo",
+      entityId: id,
+      entityName: `Promo #${id}`,
+      description: "Promo deleted",
+      metadata: { promo_id: id },
+      ipAddress: req.ip || null,
+      branchId: null,
+    });
+
     res.json({ message: "Promo deleted successfully" });
   } catch (error) {
     logSqlProviderError("Supabase/Postgres delete promo error:", error);
@@ -781,6 +821,20 @@ export const bulkUpdatePromosMySQL: RequestHandler = async (req, res) => {
       `UPDATE promos SET active = ? WHERE id IN (${placeholders})`,
       [active !== false, ...promo_ids]
     );
+
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "BULK_UPDATE_PROMOS",
+      entityType: "promo",
+      entityId: promo_ids.join(","),
+      entityName: `${promo_ids.length} promos`,
+      description: `Updated ${promo_ids.length} promos`,
+      metadata: { promo_ids, active },
+      ipAddress: req.ip || null,
+      branchId: null,
+    });
 
     res.json({
       message: "Promos updated successfully",
@@ -1270,6 +1324,7 @@ export const handleGetSalesStatsMySQL: RequestHandler = async (req, res) => {
       clauses.push("date <= ?");
       params.push(`${endDate} 23:59:59`);
     }
+    clauses.push("status = 'completed'");
 
     const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
 
@@ -1386,6 +1441,7 @@ export const handleGetSalesTrendMySQL: RequestHandler = async (req, res) => {
       clauses.push("branch_id = ?");
       params.push(resolvedBranchId);
     }
+    clauses.push("status = 'completed'");
     clauses.push("date >= ?");
     params.push(formatLocalDateTime(start));
     clauses.push("date <= ?");
@@ -1491,6 +1547,20 @@ export const handleCreatePricingMySQL: RequestHandler = async (req, res) => {
       ]
     );
 
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "CREATE_PRICING",
+      entityType: "pricing",
+      entityId: id,
+      entityName: `Pricing for ${productId}`,
+      description: `Pricing created for product ${productId}`,
+      metadata: { productId, basePrice, wholesalePrice, retailPrice, distributorPrice, markup },
+      ipAddress: req.ip || null,
+      branchId: null,
+    });
+
     res.status(201).json({ message: "Pricing created successfully", id });
   } catch (error) {
     logSqlProviderError("Supabase/Postgres create pricing error:", error);
@@ -1547,6 +1617,20 @@ export const handleUpdatePricingMySQL: RequestHandler = async (req, res) => {
 
     await connection.query(`UPDATE pricing SET ${updates.join(", ")} WHERE id = ?`, values);
 
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "UPDATE_PRICING",
+      entityType: "pricing",
+      entityId: id,
+      entityName: `Pricing #${id}`,
+      description: `Pricing ${id} updated`,
+      metadata: { basePrice, wholesalePrice, retailPrice, distributorPrice, markup },
+      ipAddress: req.ip || null,
+      branchId: null,
+    });
+
     res.json({ message: "Pricing updated successfully" });
   } catch (error) {
     logSqlProviderError("Supabase/Postgres update pricing error:", error);
@@ -1569,6 +1653,20 @@ export const handleDeletePricingMySQL: RequestHandler = async (req, res) => {
       res.status(404).json({ error: "Pricing not found" });
       return;
     }
+
+    await logActivity(connection, {
+      userId: req.user?.id || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "DELETE_PRICING",
+      entityType: "pricing",
+      entityId: id,
+      entityName: `Pricing #${id}`,
+      description: `Pricing ${id} deleted`,
+      metadata: { pricing_id: id },
+      ipAddress: req.ip || null,
+      branchId: null,
+    });
 
     res.json({ message: "Pricing deleted successfully" });
   } catch (error) {
@@ -1711,6 +1809,27 @@ export const handleCreateSaleMySQL: RequestHandler = async (req, res) => {
     }
 
     await connection.commit();
+
+    await logActivity(connection, {
+      userId: req.user?.id || req.session?.userId || null,
+      userName: req.user?.name || null,
+      userRole: req.user?.role || null,
+      action: "CREATE_SALE",
+      entityType: "sale",
+      entityId: saleId,
+      entityName: `Sale #${saleId}`,
+      description: "Sale created successfully",
+      metadata: {
+        branchId,
+        paymentMethod: normalizedPaymentMethod,
+        totalAmount: finalTotal,
+        itemsCount: totalQuantity,
+        subtotal: computedSubtotal,
+        discountAmount,
+      },
+      ipAddress: req.ip || null,
+      branchId: String(branchId),
+    });
 
     res.status(201).json({
       saleId,

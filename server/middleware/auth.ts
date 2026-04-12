@@ -135,7 +135,7 @@ export function requireAdminOrOwner(userIdParam: string = "userId"): RequestHand
 }
 
 // Middleware to load user from session
-export const loadUser: RequestHandler = (req, res, next) => {
+export const loadUser: RequestHandler = (req, _res, next) => {
   if (req.session?.user) {
     req.user = req.session.user;
   }

@@ -466,13 +466,15 @@ export default function BranchDashboard() {
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             <Card className="bg-white shadow-sm">
-            <CardHeader className="space-y-3">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <CardHeader className="space-y-4">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div>
-                  <CardTitle>Sales Trend ({trendDateRange.label})</CardTitle>
+                  <CardTitle className="text-lg sm:text-xl leading-tight">
+                    Sales Trend ({trendDateRange.label})
+                  </CardTitle>
                   <p className="text-xs text-slate-500 mt-1">Current branch only</p>
                 </div>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
                   <div className="w-full sm:w-44">
                     <Select value={trendRange} onValueChange={(value) => setTrendRange(value as TrendRange)}>
                       <SelectTrigger className="h-10 bg-white">
@@ -489,7 +491,7 @@ export default function BranchDashboard() {
                     </Select>
                   </div>
                   {trendRange === "custom" && (
-                    <>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                       <Input
                         type="date"
                         value={customTrendStartDate}
@@ -502,29 +504,29 @@ export default function BranchDashboard() {
                         onChange={(event) => setCustomTrendEndDate(event.target.value)}
                         className="h-10 w-full sm:w-40"
                       />
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               {isLoadingTrend ? (
-                <div className="flex items-center justify-center h-[300px]">
+                <div className="flex items-center justify-center h-[260px] sm:h-[300px]">
                   <div className="text-sm text-slate-500">Loading sales data...</div>
                 </div>
               ) : dashboardData.length === 0 ? (
-                <div className="flex items-center justify-center h-[300px]">
+                <div className="flex items-center justify-center h-[260px] sm:h-[300px]">
                   <div className="text-center">
                     <TrendingUp className="w-12 h-12 text-slate-300 mx-auto mb-2" />
                     <p className="text-sm text-slate-500">No sales data available</p>
                   </div>
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={dashboardData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="month" stroke="#64748b" />
-                    <YAxis stroke="#64748b" />
+                    <XAxis dataKey="month" stroke="#64748b" tick={{ fontSize: 12 }} />
+                    <YAxis stroke="#64748b" tick={{ fontSize: 12 }} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "#ffffff",

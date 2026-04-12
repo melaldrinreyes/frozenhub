@@ -179,7 +179,7 @@ export const securityLogger: RequestHandler = (req, res, next) => {
 };
 
 // Prevent timing attacks on password comparison
-export const preventTimingAttacks: RequestHandler = async (req, res, next) => {
+export const preventTimingAttacks: RequestHandler = async (_req, _res, next) => {
   // Add a small random delay to prevent timing attacks (0-50ms)
   const delay = Math.random() * 50;
   await new Promise((resolve) => setTimeout(resolve, delay));
