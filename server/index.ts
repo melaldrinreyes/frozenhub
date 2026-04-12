@@ -523,7 +523,7 @@ export function createServer() {
   app.delete("/api/settings/:key", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleDeleteSettingMySQL : handleDeleteSetting);
 
   // Upload routes (strict rate limiting for file uploads)
-  app.post("/api/upload/product-image", requireAuth, requireRole("admin"), strictRateLimiter, upload.single("image"), handleUploadProductImage);
+  app.post("/api/upload/product-image", strictRateLimiter, upload.single("image"), handleUploadProductImage);
   app.delete("/api/upload/product-image", requireAuth, requireRole("admin"), strictRateLimiter, handleDeleteProductImage);
   app.post("/api/upload/banner", requireAuth, requireRole("admin"), strictRateLimiter, uploadBanner.single("image"), handleUploadBanner);
   app.delete("/api/upload/banner", requireAuth, requireRole("admin"), strictRateLimiter, handleDeleteBanner);
