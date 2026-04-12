@@ -99,6 +99,23 @@ function formatActionLabel(action: string) {
   return actionLabels[action] || toTitleCase(action);
 }
 
+function formatMetadataValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function formatMetadataSummary(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object") return "";
+
+  const pairs = Object.entries(metadata as Record<string, unknown>)
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .map(([key, value]) => `${toTitleCase(key)}: ${formatMetadataValue(value)}`);
+
+  return pairs.join(" • ");
+}
+
 function csvEscape(value: unknown) {
   const text = value === null || value === undefined ? "" : String(value);
   return `"${text.replace(/"/g, '""')}"`;
@@ -498,7 +515,7 @@ export default function AuditLogs() {
                             {formatDateTime(log.created_at).toLocaleString()}
                           </TableCell>
                           <TableCell>
-                                {formatActionLabel(log.action)}
+                            <div className="font-medium text-slate-900">{log.user_name || "System"}</div>
                             <div className="text-xs text-slate-500">{log.user_id || "-"}</div>
                           </TableCell>
                           <TableCell>
@@ -506,7 +523,7 @@ export default function AuditLogs() {
                           </TableCell>
                           <TableCell>
                             <Badge className="bg-gold-500/15 text-gold-700 border border-gold-500/30 hover:bg-gold-500/20">
-                              {toTitleCase(log.action)}
+                              {formatActionLabel(log.action)}
                             </Badge>
                           </TableCell>
                           <TableCell>
@@ -518,9 +535,9 @@ export default function AuditLogs() {
                           </TableCell>
                           <TableCell className="max-w-[360px]">
                             <div className="text-slate-700">{log.description || "-"}</div>
-                            {log.metadata && (
+                            {formatMetadataSummary(log.metadata) && (
                               <div className="mt-1 text-xs text-slate-500 break-all">
-                                {JSON.stringify(log.metadata)}
+                                {formatMetadataSummary(log.metadata)}
                               </div>
                             )}
                           </TableCell>
@@ -538,7 +555,7 @@ export default function AuditLogs() {
                           <div className="font-semibold text-slate-900">{log.user_name || "System"}</div>
                           <div className="text-xs text-slate-500">{formatDateTime(log.created_at).toLocaleString()}</div>
                         </div>
-                        <Badge className="bg-gold-500/15 text-gold-700 border border-gold-500/30">{toTitleCase(log.action)}</Badge>
+                        <Badge className="bg-gold-500/15 text-gold-700 border border-gold-500/30">{formatActionLabel(log.action)}</Badge>
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                         <div>
@@ -559,10 +576,10 @@ export default function AuditLogs() {
                         </div>
                       </div>
                       <div className="mt-3 text-sm text-slate-700">{log.description || "-"}</div>
-                      {log.metadata && (
-                        <pre className="mt-3 overflow-auto rounded-lg bg-white p-3 text-xs text-slate-600 border border-slate-200">
-                          {JSON.stringify(log.metadata, null, 2)}
-                        </pre>
+                      {formatMetadataSummary(log.metadata) && (
+                        <div className="mt-2 text-xs text-slate-600 rounded-lg bg-white p-3 border border-slate-200">
+                          {formatMetadataSummary(log.metadata)}
+                        </div>
                       )}
                     </div>
                   ))}
