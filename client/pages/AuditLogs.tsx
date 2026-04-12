@@ -54,6 +54,51 @@ function toTitleCase(value: string) {
   return String(value || "").replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function formatActionLabel(action: string) {
+  const actionLabels: Record<string, string> = {
+    USER_LOGIN: "Login",
+    USER_LOGOUT: "Logout",
+    USER_SIGNUP: "Signup",
+    CHANGE_PASSWORD: "Password Changed",
+    CREATE_SALE: "Sale Created",
+    UPDATE_ORDER_STATUS: "Order Status Updated",
+    CREATE_ORDER: "Order Created",
+    CANCEL_ORDER: "Order Cancelled",
+    ASSIGN_RIDER: "Rider Assigned",
+    ASSIGN_RIDER_BRANCH: "Rider Branch Assigned",
+    CREATE_PRODUCT: "Product Created",
+    UPDATE_PRODUCT: "Product Updated",
+    DELETE_PRODUCT: "Product Deleted",
+    ADD_INVENTORY: "Inventory Added",
+    UPDATE_INVENTORY: "Inventory Updated",
+    DELETE_INVENTORY: "Inventory Deleted",
+    STOCK_TRANSFER: "Stock Transfer",
+    CREATE_BRANCH: "Branch Created",
+    UPDATE_BRANCH: "Branch Updated",
+    DELETE_BRANCH: "Branch Deleted",
+    CREATE_USER: "User Created",
+    UPDATE_USER: "User Updated",
+    DELETE_USER: "User Deleted",
+    CREATE_PURCHASE: "Purchase Created",
+    UPDATE_PURCHASE: "Purchase Updated",
+    DELETE_PURCHASE: "Purchase Deleted",
+    CREATE_CATEGORY: "Category Created",
+    UPDATE_CATEGORY: "Category Updated",
+    DELETE_CATEGORY: "Category Deleted",
+    UPDATE_SETTING: "Setting Updated",
+    DELETE_SETTING: "Setting Deleted",
+    CREATE_PROMO: "Promo Created",
+    UPDATE_PROMO: "Promo Updated",
+    DELETE_PROMO: "Promo Deleted",
+    BULK_UPDATE_PROMOS: "Promos Bulk Updated",
+    CREATE_PRICING: "Pricing Created",
+    UPDATE_PRICING: "Pricing Updated",
+    DELETE_PRICING: "Pricing Deleted",
+  };
+
+  return actionLabels[action] || toTitleCase(action);
+}
+
 function csvEscape(value: unknown) {
   const text = value === null || value === undefined ? "" : String(value);
   return `"${text.replace(/"/g, '""')}"`;
@@ -166,7 +211,7 @@ export default function AuditLogs() {
       formatDateTime(log.created_at).toLocaleString(),
       log.user_name || "-",
       log.user_role || "-",
-      toTitleCase(log.action),
+      formatActionLabel(log.action),
       toTitleCase(log.entity_type),
       log.entity_name || "-",
       log.branch_name || log.branch_id || "All Branches",
@@ -316,7 +361,7 @@ export default function AuditLogs() {
                     <SelectItem value="all">All Actions</SelectItem>
                     {uniqueActions.map((action) => (
                       <SelectItem key={action} value={action}>
-                        {toTitleCase(action)}
+                        {formatActionLabel(action)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -453,7 +498,7 @@ export default function AuditLogs() {
                             {formatDateTime(log.created_at).toLocaleString()}
                           </TableCell>
                           <TableCell>
-                            <div className="font-medium text-slate-900">{log.user_name || "System"}</div>
+                                {formatActionLabel(log.action)}
                             <div className="text-xs text-slate-500">{log.user_id || "-"}</div>
                           </TableCell>
                           <TableCell>

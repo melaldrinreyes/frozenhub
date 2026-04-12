@@ -1,5 +1,7 @@
 import { RequestHandler } from "express";
+import { getConnection } from "../db";
 import { disabledRoute } from "./disabled-data";
+import { logActivity } from "./activity-logs";
 import { cleanupSessionTracking } from "../middleware/sessionSecurity";
 
 // Login endpoint
@@ -10,6 +12,7 @@ export const handleSignup = disabledRoute("handleSignup");
 
 // Logout endpoint
 export const handleLogout: RequestHandler = (req, res) => {
+  const currentUser = req.user || req.session?.user || null;
   const sessionId = req.sessionID;
   const userId = req.session?.userId;
 
@@ -22,6 +25,30 @@ export const handleLogout: RequestHandler = (req, res) => {
     
     // Clean up session tracking
     cleanupSessionTracking(sessionId, userId);
+
+    void (async () => {
+      let connection;
+      try {
+        connection = await getConnection();
+        await logActivity(connection, {
+          userId: currentUser?.id || userId || null,
+          userName: currentUser?.name || null,
+          userRole: currentUser?.role || null,
+          action: "USER_LOGOUT",
+          entityType: "auth",
+          entityId: currentUser?.id || userId || null,
+          entityName: currentUser?.name || null,
+          description: `${currentUser?.name || "User"} logged out`,
+          metadata: { sessionId },
+          ipAddress: req.ip || null,
+          branchId: currentUser?.branch_id || null,
+        });
+      } catch (logoutLogError) {
+        console.error("Logout activity log error:", logoutLogError);
+      } finally {
+        connection?.release();
+      }
+    })();
     
     res.clearCookie("sessionId"); // Match the custom session name
     
