@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/authContext";
+import { confirmLogout } from "@/lib/logout";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/apiClient";
 import {
@@ -140,6 +141,7 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
   const navigation = isSystemAdmin ? adminNavigation : branchNavigation;
 
   const handleLogout = async () => {
+    if (!confirmLogout()) return;
     await logout();
     navigate("/");
   };

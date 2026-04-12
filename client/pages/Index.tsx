@@ -26,6 +26,7 @@ import {
 import LoginModal from "@/components/LoginModal";
 import { apiClient } from "@/lib/apiClient";
 import { useAuth } from "@/lib/authContext";
+import { confirmLogout } from "@/lib/logout";
 import useEmblaCarousel from "embla-carousel-react";
 import { formatPromoDate, getPromoCountdown, getPromoStatus, formatPromoDescription, formatDiscountDisplay } from "@/lib/discountUtils";
 import { getTimeRemaining, formatDate } from "@/lib/dateUtils";
@@ -88,6 +89,11 @@ export default function Index() {
   const scrollProductsNext = useCallback(() => {
     if (emblaProductsApi) emblaProductsApi.scrollNext();
   }, [emblaProductsApi]);
+
+  const handleLogout = async () => {
+    if (!confirmLogout()) return;
+    await logout();
+  };
 
   // Fetch hero banner setting
   const { data: bannerData } = useQuery({
@@ -585,7 +591,7 @@ export default function Index() {
               </button>
               {isAuthenticated ? (
                 <Button
-                  onClick={logout}
+                  onClick={handleLogout}
                   size="sm"
                   className="bg-red-500/90 hover:bg-red-600 text-white font-medium px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
                 >

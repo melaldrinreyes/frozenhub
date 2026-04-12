@@ -5,7 +5,7 @@ import session from "express-session";
 import cookieParser from "cookie-parser";
 import fs from "fs";
 import path from "path";
-import { initializeDatabase, seedDatabase } from "./db";
+import { getConnection, initializeDatabase, seedDatabase } from "./db";
 import { loadUser, requireAuth, requireRole } from "./middleware/auth";
 import { jwtMiddleware } from "./middleware/jwt";
 import {
@@ -216,6 +216,16 @@ let dbInitErrorMessage: string | null = null;
 let dbInitLastFailureAt = 0;
 const DB_INIT_RETRY_COOLDOWN_MS = 15000;
 
+function shouldBootstrapDatabaseOnStartup() {
+  const isServerless = process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL;
+  const explicitFlag = String(process.env.DB_BOOTSTRAP_ON_STARTUP || "").trim().toLowerCase();
+
+  if (explicitFlag === "true") return true;
+  if (explicitFlag === "false") return false;
+
+  return !isServerless;
+}
+
 function getDataProvider(): "supabase" | "none" {
   const provider = (process.env.DATA_PROVIDER || "supabase").toLowerCase();
   if (provider === "none") return "none";
@@ -257,9 +267,19 @@ async function ensureDatabaseInitialized() {
         console.log("✓ Running with DATA_PROVIDER=none (API data endpoints disabled)");
         dbInitialized = true;
       } else {
-        await initializeDatabase();
-        await seedDatabase();
-        console.log("✓ Supabase/Postgres initialized successfully");
+        if (shouldBootstrapDatabaseOnStartup()) {
+          await initializeDatabase();
+          await seedDatabase();
+          console.log("✓ Supabase/Postgres initialized successfully");
+        } else {
+          const warmupConnection = await getConnection();
+          try {
+            await warmupConnection.query("SELECT 1");
+          } finally {
+            warmupConnection.release();
+          }
+          console.log("✓ Supabase/Postgres connection warmed up (startup bootstrap skipped)");
+        }
         dbInitialized = true;
       }
     } catch (error) {

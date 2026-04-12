@@ -1,7 +1,14 @@
 import { RequestHandler } from "express";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import helmet from "helmet";
 import hpp from "hpp";
+
+function getLoginThrottleKey(req: any) {
+  const ip = ipKeyGenerator(req.ip || req.socket?.remoteAddress || "unknown");
+  const identifierRaw = req?.body?.identifier || req?.body?.username || req?.body?.email || "anonymous";
+  const identifier = String(identifierRaw).trim().toLowerCase();
+  return `${ip}:${identifier || "anonymous"}`;
+}
 
 // Helmet configuration for security headers
 export const helmetConfig = helmet({
@@ -25,13 +32,14 @@ export const helmetConfig = helmet({
 
 // Rate limiting for login attempts (10 attempts per 15 minutes in dev, 5 in production)
 export const loginRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === "development" ? 10 : 5, // More lenient in development
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: process.env.NODE_ENV === "development" ? 30 : 10,
   message: {
-    error: "Too many login attempts from this IP, please try again after 15 minutes",
+    error: "Too many login attempts for this account from your network, please try again after 10 minutes",
   },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: getLoginThrottleKey,
   skipSuccessfulRequests: true, // Don't count successful logins
   skip: (req) => {
     // Skip rate limiting in development for localhost

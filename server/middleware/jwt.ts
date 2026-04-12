@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { Request, Response, NextFunction } from "express";
+import { Request, RequestHandler } from "express";
 import { AuthUser } from "./auth";
 
 const JWT_SECRET = process.env.JWT_SECRET || "frozenhub-jwt-secret-change-in-production";
@@ -33,8 +33,8 @@ export function verifyToken(token: string): PayloadWithToken | null {
  * Middleware to extract JWT from Authorization header
  * Format: Bearer <token>
  */
-export function jwtMiddleware(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
+export const jwtMiddleware: RequestHandler = (req, _res, next) => {
+  const authHeader = req.get("authorization");
   
   if (!authHeader?.startsWith("Bearer ")) {
     return next();
@@ -45,8 +45,8 @@ export function jwtMiddleware(req: Request, res: Response, next: NextFunction) {
 
   if (payload) {
     // Attach user to request for use in routes
-    req.user = payload;
+    (req as Request & { user?: PayloadWithToken }).user = payload;
   }
 
-  next();
-}
+  return next();
+};

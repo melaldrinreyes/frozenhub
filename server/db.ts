@@ -46,12 +46,32 @@ function isSupabaseDataProviderEnabled() {
 
 function getPoolConfig() {
   const connectionString = getConnectionString();
+  const isServerlessRuntime = Boolean(process.env.VERCEL || process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME);
+  const configuredMax = Number(process.env.DB_POOL_MAX || "");
+  const poolMax = Number.isFinite(configuredMax) && configuredMax > 0
+    ? Math.max(1, Math.floor(configuredMax))
+    : isServerlessRuntime
+      ? 1
+      : 10;
+
+  const configuredIdleTimeout = Number(process.env.DB_POOL_IDLE_TIMEOUT_MS || "");
+  const idleTimeoutMillis = Number.isFinite(configuredIdleTimeout) && configuredIdleTimeout >= 0
+    ? Math.floor(configuredIdleTimeout)
+    : isServerlessRuntime
+      ? 2_000
+      : 10_000;
+
+  const configuredConnectTimeout = Number(process.env.DB_POOL_CONNECT_TIMEOUT_MS || "");
+  const connectionTimeoutMillis = Number.isFinite(configuredConnectTimeout) && configuredConnectTimeout >= 0
+    ? Math.floor(configuredConnectTimeout)
+    : 10_000;
+
   if (connectionString) {
     return {
       connectionString,
-      max: 10,
-      idleTimeoutMillis: 10_000,
-      connectionTimeoutMillis: 10_000,
+      max: poolMax,
+      idleTimeoutMillis,
+      connectionTimeoutMillis,
       ssl: shouldUseSsl() ? { rejectUnauthorized: false } : undefined,
     };
   }
@@ -72,9 +92,9 @@ function getPoolConfig() {
     user,
     password,
     database,
-    max: 10,
-    idleTimeoutMillis: 10_000,
-    connectionTimeoutMillis: 10_000,
+    max: poolMax,
+    idleTimeoutMillis,
+    connectionTimeoutMillis,
     ssl: shouldUseSsl() ? { rejectUnauthorized: false } : undefined,
   };
 }

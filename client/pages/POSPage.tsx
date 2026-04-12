@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/authContext";
+import { confirmLogout } from "@/lib/logout";
 import Receipt from "@/components/Receipt";
 import { useBranchName } from "@/hooks/useBranchName";
 import {
@@ -420,6 +421,7 @@ export default function POSPage() {
   const salesHistory = salesHistoryData?.sales || [];
 
   const handleLogout = async () => {
+    if (!confirmLogout()) return;
     await logout();
     navigate("/");
   };

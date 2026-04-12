@@ -63,16 +63,18 @@ export const handleLogout: RequestHandler = (req, res) => {
 
 // Get current user
 export const handleGetMe: RequestHandler = (req, res) => {
-  if (!req.session?.userId) {
-    res.json({ user: null });
-    return;
+  const sessionUser = req.session?.user || null;
+  const tokenUser = req.user || null;
+
+  const currentUser = tokenUser || sessionUser;
+
+  if (currentUser && req.session) {
+    req.session.userId = currentUser.id;
+    req.session.userRole = currentUser.role;
+    req.session.user = currentUser;
   }
 
-  if (req.session.user) {
-    res.json({ user: req.session.user });
-  } else {
-    res.json({ user: null });
-  }
+  res.json({ user: currentUser });
 };
 
 // Google OAuth removed by project configuration.

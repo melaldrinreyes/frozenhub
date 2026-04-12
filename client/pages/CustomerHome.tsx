@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/authContext";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/apiClient";
+import { confirmLogout } from "@/lib/logout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DiscountBadge, SaleBanner } from "@/components/DiscountBadge";
@@ -58,6 +59,12 @@ export default function CustomerHome() {
   const scrollNext = useCallback(() => {
     if (emblaApi) emblaApi.scrollNext();
   }, [emblaApi]);
+
+  const handleLogout = async () => {
+    if (!confirmLogout()) return;
+    await logout();
+    navigate("/");
+  };
 
   // Update countdown every minute for real-time display
   useEffect(() => {
@@ -233,25 +240,32 @@ export default function CustomerHome() {
   const totalProductsText = systemStats?.products?.total ? `${systemStats.products.total}+` : `${products.length}+`;
   const totalBranchesText = systemStats?.branches?.total ? `${systemStats.branches.total}+` : `${branches.length}+`;
   const supportText = systemStats?.support || "24/7";
+  const promoGradientClass = "customer-home-promo-banner";
+  const featuredBgClass = featuredBgType === "image" ? "customer-home-featured-image" : "customer-home-featured-solid";
+  const promoGradientCss = `
+    .customer-home-promo-banner {
+      background: linear-gradient(to right, ${promoBgColor}, ${adjustBrightness(promoBgColor, 20)}, ${promoBgColor});
+    }
+    .customer-home-featured-solid {
+      background-color: ${featuredBgColor};
+    }
+  `;
 
-
-  const handleLogout = async () => {
-    await logout();
-    navigate("/");
-  };
 
   return (
     <CustomerLayout>
+    <style>{promoGradientCss}</style>
     <div className="min-h-screen bg-gray-50">
       {/* Hero Section */}
       <section
-        className="relative h-[500px] sm:h-[600px] flex items-center justify-center"
-        style={{
-          backgroundImage: `url(${banner})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
+        className="relative h-[500px] sm:h-[600px] flex items-center justify-center overflow-hidden"
       >
+        <img
+          src={banner}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
         <div className="relative z-10 text-center px-4 sm:px-6 max-w-4xl mx-auto">
           <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold text-white mb-4 sm:mb-6">
@@ -287,10 +301,7 @@ export default function CustomerHome() {
       {promoEnabled && (
         <section 
           id="promo-banner" 
-          className="py-8 sm:py-12 md:py-16 relative overflow-hidden"
-          style={{
-            background: `linear-gradient(to right, ${promoBgColor}, ${adjustBrightness(promoBgColor, 20)}, ${promoBgColor})`
-          }}
+          className={`py-8 sm:py-12 md:py-16 relative overflow-hidden ${promoGradientClass}`}
         >
           {/* Decorative Elements */}
           <div className="absolute inset-0 opacity-10">
@@ -473,20 +484,18 @@ export default function CustomerHome() {
       {/* Featured Products Section */}
       <section
         id="products"
-        className="py-12 sm:py-16 md:py-20 relative"
-        style={
-          featuredBgType === "image" && featuredBgImage
-            ? {
-                backgroundImage: `url(${featuredBgImage})`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-                backgroundRepeat: "no-repeat",
-              }
-            : { backgroundColor: featuredBgColor }
-        }
+        className={`py-12 sm:py-16 md:py-20 relative overflow-hidden ${featuredBgClass}`}
       >
         {featuredBgType === "image" && featuredBgImage && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+          <>
+            <img
+              src={featuredBgImage}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+          </>
         )}
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
@@ -749,12 +758,16 @@ export default function CustomerHome() {
                 <button
                   className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/70 hover:bg-black text-white p-2 rounded-full shadow-lg z-10"
                   onClick={scrollPrev}
+                  aria-label="Previous featured products"
+                  title="Previous"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
                 <button
                   className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/70 hover:bg-black text-white p-2 rounded-full shadow-lg z-10"
                   onClick={scrollNext}
+                  aria-label="Next featured products"
+                  title="Next"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>

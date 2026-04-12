@@ -145,16 +145,11 @@ export default function BranchDashboard() {
     enabled: !!user && user.role === "branch_admin",
   });
 
-  // Fetch sales statistics (TODAY ONLY for dashboard cards)
+  // Fetch all-time sales statistics for the summary cards
   const { data: salesStats, isLoading: isLoadingStats } = useQuery({
     queryKey: ["dashboard-sales-stats", user?.branch_id],
     queryFn: async () => {
-      // Get today's stats
-      const today = new Date();
-      const startDate = formatDateLocal(today);
-      const endDate = formatDateLocal(today);
-
-      return apiClient.getSalesStats(user?.branch_id || undefined, startDate, endDate);
+      return apiClient.getSalesStats(user?.branch_id || undefined);
     },
     enabled: !!user && user.role === "branch_admin",
   });
@@ -388,26 +383,26 @@ export default function BranchDashboard() {
             <Card className="hover:shadow-md transition-shadow bg-white">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Today's Sales
+                  Sales (All Time)
                 </CardTitle>
                 <DollarSign className="w-4 h-4 text-secondary" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">₱{(salesStats?.totalRevenue || 0).toLocaleString()}</div>
-                <p className="text-xs text-slate-600">Today's revenue</p>
+                <p className="text-xs text-slate-600">All branch sales</p>
               </CardContent>
             </Card>
 
             <Card className="hover:shadow-md transition-shadow bg-white">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Today's Orders
+                  Orders (All Time)
                 </CardTitle>
                 <ShoppingCart className="w-4 h-4 text-accent" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{salesStats?.totalSales || 0}</div>
-                <p className="text-xs text-slate-600">Completed transactions</p>
+                <p className="text-xs text-slate-600">All completed orders</p>
               </CardContent>
             </Card>
 
@@ -420,7 +415,7 @@ export default function BranchDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">₱{(salesStats?.avgOrderValue || 0).toLocaleString()}</div>
-              <p className="text-xs text-slate-600">Today's average</p>
+              <p className="text-xs text-slate-600">Average across all orders</p>
             </CardContent>
           </Card>
           </div>

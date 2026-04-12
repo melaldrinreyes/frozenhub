@@ -1,4 +1,13 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { IncomingMessage, ServerResponse } from "http";
+
+type VercelRequest = IncomingMessage & {
+  query?: Record<string, string | string[]>;
+  body?: unknown;
+  method?: string;
+  url?: string;
+};
+
+type VercelResponse = ServerResponse;
 
 // Vercel executes this file in Node.js directly. Import the prebuilt server bundle
 // to avoid runtime TypeScript module resolution issues.

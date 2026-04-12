@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { DiscountBadge, SaleBanner } from "@/components/DiscountBadge";
 import { getDiscountedPrice, getDiscountAmount, formatPromoDate, getPromoCountdown, getPromoStatus, formatPromoDescription, formatDiscountDisplay } from "@/lib/discountUtils";
 import { getTimeRemaining, formatDate } from "@/lib/dateUtils";
+import { confirmLogout } from "@/lib/logout";
 import {
   Select,
   SelectContent,
@@ -303,6 +304,7 @@ export default function CustomerShop() {
   const categories = Array.from(new Set(products.map((p) => p.category)));
 
   const handleLogout = () => {
+    if (!confirmLogout()) return;
     logout();
     navigate("/");
   };

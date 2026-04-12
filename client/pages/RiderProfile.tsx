@@ -4,9 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/authContext";
+import { confirmLogout } from "@/lib/logout";
 import { apiClient } from "@/lib/apiClient";
 import { useToast } from "@/hooks/use-toast";
 import { Bike, Clock, CheckCircle2, MapPin, Phone, User } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 interface RiderOrder {
   id: string;
@@ -41,6 +43,7 @@ interface DeliveryHistoryItem {
 
 export default function RiderProfile() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedStatus, setSelectedStatus] = useState<"all" | "ready" | "picked_up" | "completed">("ready");
@@ -48,6 +51,12 @@ export default function RiderProfile() {
   const toNumber = (value: unknown): number => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const handleLogout = async () => {
+    if (!confirmLogout()) return;
+    await logout();
+    navigate("/");
   };
 
   const { data: orders = [], isLoading } = useQuery({
@@ -130,7 +139,7 @@ export default function RiderProfile() {
                 Branch online deliveries for branch {user?.branch_id || "N/A"}
               </p>
             </div>
-            <Button onClick={logout} className="bg-black text-white hover:bg-black/90">Logout</Button>
+            <Button onClick={handleLogout} className="bg-black text-white hover:bg-black/90">Logout</Button>
           </div>
         </div>
 

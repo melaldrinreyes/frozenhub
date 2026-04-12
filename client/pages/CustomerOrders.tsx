@@ -25,6 +25,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/apiClient";
 import { useToast } from "@/hooks/use-toast";
+import { confirmLogout } from "@/lib/logout";
 import {
   Select,
   SelectContent,
@@ -245,6 +246,7 @@ export default function CustomerOrders() {
   });
 
   const handleLogout = async () => {
+    if (!confirmLogout()) return;
     await logout();
     navigate("/");
   };

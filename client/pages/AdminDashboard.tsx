@@ -136,14 +136,12 @@ export default function AdminDashboard() {
     },
   });
 
-  // Fetch sales stats (all branches)
-  const { data: salesStatsData, isLoading: isLoadingStats } = useQuery({
-    queryKey: ["sales-stats-admin"],
+  // Fetch system-wide totals for the summary cards.
+  // This is more reliable than the branch-scoped sales stats route for admin views.
+  const { data: systemStatsData, isLoading: isLoadingStats } = useQuery({
+    queryKey: ["system-stats-admin"],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      const response = await fetch(`/api/sales/stats?${params}`);
-      if (!response.ok) throw new Error('Failed to fetch sales stats');
-      return response.json();
+      return apiClient.getSystemStats();
     },
   });
 
@@ -221,8 +219,8 @@ export default function AdminDashboard() {
       .sort((a, b) => b.value - a.value);
   }, [productsData]);
   const totalProducts = inventoryData?.inventory?.length || 0;
-  const totalRevenue = salesStatsData?.totalRevenue || 0;
-  const totalSales = salesStatsData?.totalSales || 0;
+  const totalRevenue = systemStatsData?.stats?.sales?.revenue || 0;
+  const totalSales = systemStatsData?.stats?.sales?.total || 0;
   const activeBranches = branchesData?.branches?.filter((b: any) => b.is_active)?.length || 0;
   const lowStockCount = inventoryData?.inventory?.filter((item: any) => item.quantity <= (item.reorder_level || 10))?.length || 0;
 

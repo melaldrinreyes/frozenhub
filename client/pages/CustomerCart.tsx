@@ -5,6 +5,7 @@ import { CustomerLayout } from "@/components/CustomerLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { confirmLogout } from "@/lib/logout";
 import {
   Snowflake,
   ShoppingBag,
@@ -276,6 +277,7 @@ export default function CustomerCart() {
   };
 
   const handleLogout = async () => {
+    if (!confirmLogout()) return;
     await logout();
     navigate("/");
   };

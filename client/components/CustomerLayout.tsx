@@ -1,6 +1,7 @@
 import { ReactNode, useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/authContext";
+import { confirmLogout } from "@/lib/logout";
 import {
   ShoppingBag,
   Package,
@@ -110,6 +111,7 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
   }, [user?.id]);
 
   const handleLogout = async () => {
+    if (!confirmLogout()) return;
     await logout();
     navigate("/");
   };
