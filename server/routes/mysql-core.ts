@@ -1177,6 +1177,47 @@ export const handleGetSalesMySQL: RequestHandler = async (req, res) => {
       params
     );
 
+    const saleIds = (salesRows as any[]).map((sale) => sale.id).filter(Boolean);
+    const itemsBySaleId = new Map<string, any[]>();
+
+    if (saleIds.length > 0) {
+      const placeholders = saleIds.map(() => "?").join(", ");
+      const [itemRows] = await connection.query(
+        `SELECT
+           si.sale_id,
+           si.product_id,
+           si.quantity,
+           si.price AS unit_price,
+           si.price,
+           si.total,
+           si.subtotal,
+           si.discount_amount,
+           p.name AS product_name
+         FROM sale_items si
+         LEFT JOIN products p ON p.id = si.product_id
+         WHERE si.sale_id IN (${placeholders})
+         ORDER BY si.sale_id ASC, si.id ASC`,
+        saleIds
+      );
+
+      for (const row of itemRows as any[]) {
+        const key = String(row.sale_id || "");
+        if (!itemsBySaleId.has(key)) {
+          itemsBySaleId.set(key, []);
+        }
+        itemsBySaleId.get(key)?.push({
+          ...row,
+          product_name: row.product_name || row.product_id || "Unknown Product",
+          quantity: Number(row.quantity || 0),
+          unit_price: Number(row.unit_price || row.price || 0),
+          price: Number(row.price || row.unit_price || 0),
+          total: Number(row.total || row.subtotal || 0),
+          subtotal: Number(row.subtotal || row.total || 0),
+          discount_amount: Number(row.discount_amount || 0),
+        });
+      }
+    }
+
     const sales = (salesRows as any[]).map((sale) => {
       let parsedCustomerInfo = null;
       try {
@@ -1191,7 +1232,7 @@ export const handleGetSalesMySQL: RequestHandler = async (req, res) => {
       return {
         ...sale,
         customer_info: parsedCustomerInfo,
-        items: [],
+        items: itemsBySaleId.get(String(sale.id || "")) || [],
       };
     });
 
