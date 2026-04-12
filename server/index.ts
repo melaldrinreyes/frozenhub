@@ -465,7 +465,7 @@ export function createServer() {
   app.get("/api/inventory/product/:productId", requireAuth, apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetProductAvailabilityMySQL : handleGetProductAvailability);
 
   // Branch & User management routes (admin only with strict limits)
-  app.get("/api/branches", requireAuth, apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetBranchesMySQL : handleGetBranches);
+  app.get("/api/branches", publicRateLimiter, runtimeDataProvider === "supabase" ? handleGetBranchesMySQL : handleGetBranches);
   app.post("/api/branches", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleCreateBranchMySQL : handleCreateBranch);
   app.put("/api/branches/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleUpdateBranchMySQL : handleUpdateBranch);
   app.delete("/api/branches/:id", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleDeleteBranchMySQL : handleDeleteBranch);
