@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/authContext";
 import { confirmLogout } from "@/lib/logout";
 import { apiClient } from "@/lib/apiClient";
 import { useToast } from "@/hooks/use-toast";
-import { Bike, Clock, CheckCircle2, MapPin, Phone, User } from "lucide-react";
+import { Bike, Clock, CheckCircle2, MapPin, Phone, User, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 interface RiderOrder {
@@ -119,6 +119,9 @@ export default function RiderProfile() {
 
   const filteredOrders = useMemo(() => {
     if (selectedStatus === "all") return orders;
+    if (selectedStatus === "picked_up") {
+      return orders.filter((o: RiderOrder) => o.status === "picked_up" || o.status === "out_for_delivery");
+    }
     return orders.filter((o: RiderOrder) => o.status === selectedStatus);
   }, [orders, selectedStatus]);
 
@@ -127,6 +130,7 @@ export default function RiderProfile() {
   const readyCount = orders.filter((o: RiderOrder) => o.status === "ready").length;
   const deliveryCount = orders.filter((o: RiderOrder) => o.status === "picked_up" || o.status === "out_for_delivery").length;
   const completedCount = deliveryHistory.length;
+  const pendingActionsCount = readyCount + deliveryCount;
 
   return (
     <div className="min-h-screen bg-slate-50 p-3 sm:p-6 lg:p-8">
@@ -184,6 +188,32 @@ export default function RiderProfile() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {pendingActionsCount > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900">Pending Delivery Actions</p>
+                      <p className="text-sm text-amber-800">
+                        {readyCount > 0 ? `${readyCount} ready for pickup` : "No ready pickups"}
+                        {" • "}
+                        {deliveryCount > 0 ? `${deliveryCount} in transit to deliver` : "No in-transit orders"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {readyCount > 0 && (
+                      <Button size="sm" variant="outline" onClick={() => setSelectedStatus("ready")}>View Ready</Button>
+                    )}
+                    {deliveryCount > 0 && (
+                      <Button size="sm" variant="outline" onClick={() => setSelectedStatus("picked_up")}>View In Transit</Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {isLoading && <div className="text-sm text-slate-500">Loading orders...</div>}
             {!isLoading && filteredOrders.length === 0 && (
               <div className="text-sm text-slate-500">No online orders found for this filter.</div>
