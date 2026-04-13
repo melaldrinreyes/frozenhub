@@ -130,6 +130,28 @@ async function tableExists(connection: any, tableName: string): Promise<boolean>
   }
 }
 
+async function usersActiveColumnExists(connection: any): Promise<boolean> {
+  try {
+    const [rows] = await connection.query("SHOW COLUMNS FROM users LIKE 'active'");
+    return (rows as any[]).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureUsersActiveColumn(connection: any): Promise<boolean> {
+  const hasActive = await usersActiveColumnExists(connection);
+  if (hasActive) return true;
+
+  try {
+    await connection.query("ALTER TABLE users ADD COLUMN active BOOLEAN NOT NULL DEFAULT TRUE");
+    return true;
+  } catch (error) {
+    console.warn("Could not auto-add users.active column:", (error as any)?.message || error);
+    return false;
+  }
+}
+
 async function verifyCurrentUserPassword(
   connection: any,
   req: any,
@@ -1100,11 +1122,13 @@ export const handleGetUsersMySQL: RequestHandler = async (req, res) => {
   let connection;
   try {
     connection = await getConnection();
+    const hasUserActiveColumn = await ensureUsersActiveColumn(connection);
 
     const hasAssignmentTable = await tableExists(connection, "rider_branch_assignments");
     const branchExpr = hasAssignmentTable
       ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.branch_id, u.branch_id) ELSE u.branch_id END"
       : "u.branch_id";
+    const activeExpr = hasUserActiveColumn ? "u.active" : "TRUE";
     const joinExpr = hasAssignmentTable
       ? "LEFT JOIN rider_branch_assignments rba ON rba.rider_id = u.id AND rba.active = TRUE"
       : "";
@@ -1132,7 +1156,7 @@ export const handleGetUsersMySQL: RequestHandler = async (req, res) => {
     const [rows] = await connection.query(
       `SELECT u.id, u.name, u.email, u.phone, u.role,
               ${branchExpr} as branch_id,
-              u.active,
+              ${activeExpr} as active,
               u.created_at,
               b.name as branch_name
        FROM users u
@@ -1260,8 +1284,18 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
   let connection;
   try {
     connection = await getConnection();
+    const hasUserActiveColumn = await ensureUsersActiveColumn(connection);
+
+    if (active !== undefined && !hasUserActiveColumn) {
+      res.status(500).json({ error: "User status update unavailable until users.active column is ready" });
+      return;
+    }
+
     values.push(id);
-    const [beforeRows] = await connection.query("SELECT role, active FROM users WHERE id = ? LIMIT 1", [id]);
+    const [beforeRows] = await connection.query(
+      `SELECT role, ${hasUserActiveColumn ? "active" : "TRUE as active"} FROM users WHERE id = ? LIMIT 1`,
+      [id]
+    );
     const existingUser = (beforeRows as any[])[0];
     if (!existingUser) {
       res.status(404).json({ error: "User not found" });
