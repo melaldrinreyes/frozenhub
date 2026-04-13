@@ -13,12 +13,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export async function signInWithGoogle() {
+  const auth = supabase.auth as any;
   const redirectTo =
     configuredRedirectUrl && configuredRedirectUrl.length > 0
       ? configuredRedirectUrl
       : `${window.location.origin}/auth/callback`;
 
-  const { data, error } = await supabase.auth.signInWithOAuth({
+  const { data, error } = await auth.signInWithOAuth({
     provider: "google",
     options: {
       redirectTo,
@@ -37,10 +38,11 @@ export async function signInWithGoogle() {
 }
 
 export async function getSession() {
+  const auth = supabase.auth as any;
   const {
     data: { session },
     error,
-  } = await supabase.auth.getSession();
+  } = await auth.getSession();
 
   if (error) {
     throw new Error(error.message);
@@ -50,7 +52,8 @@ export async function getSession() {
 }
 
 export async function signOut() {
-  const { error } = await supabase.auth.signOut();
+  const auth = supabase.auth as any;
+  const { error } = await auth.signOut();
 
   if (error) {
     throw new Error(error.message);

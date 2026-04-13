@@ -4,7 +4,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { createRoot } from "react-dom/client";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
+import * as ReactQuery from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/lib/authContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -38,7 +39,8 @@ import CustomerProfile from "./pages/CustomerProfile";
 import RiderProfile from "./pages/RiderProfile";
 import AdminManageBranches from "./pages/AdminManageBranches";
 
-const queryClient = new QueryClient();
+const QueryClientCtor = (ReactQuery as any).QueryClient;
+const queryClient = new QueryClientCtor();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

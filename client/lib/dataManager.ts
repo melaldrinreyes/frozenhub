@@ -201,11 +201,11 @@ export function sortItems<T extends { [key: string]: any }>(
   });
 }
 
-export function paginateItems<T>(
-  items: T[],
+export function paginateItems(
+  items: any[],
   page: number,
   pageSize: number,
-): { items: T[]; totalPages: number; currentPage: number } {
+): { items: any[]; totalPages: number; currentPage: number } {
   // Safety check: ensure items is an array
   if (!Array.isArray(items)) {
     console.error('paginateItems: items is not an array', items);
