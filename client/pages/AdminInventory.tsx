@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -35,10 +36,12 @@ import {
 import { filterBySearch, paginateItems } from "@/lib/dataManager";
 import { apiClient } from "@/lib/apiClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/authContext";
 import { StockTransferDialog } from "@/components/StockTransferDialog";
 import { ProductAvailabilityDialog } from "@/components/ProductAvailabilityDialog";
 
 export default function AdminInventory() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
@@ -76,6 +79,9 @@ export default function AdminInventory() {
   const [showAvailabilityDialog, setShowAvailabilityDialog] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [selectedProductName, setSelectedProductName] = useState<string>("");
+  const [updateReason, setUpdateReason] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const requiresAdminPassword = user?.role === "admin";
 
   // Fetch inventory
   const { data: inventoryData, isLoading } = useQuery({
@@ -113,6 +119,8 @@ export default function AdminInventory() {
       setIsDialogOpen(false);
       setEditingId(null);
       setFormData({ productId: "", branchId: "", quantity: 0, reorderLevel: 50 });
+      setUpdateReason("");
+      setAdminPassword("");
     },
     onError: (error: Error) => {
       toast({
@@ -136,6 +144,8 @@ export default function AdminInventory() {
       setIsDialogOpen(false);
       setEditingId(null);
       setFormData({ productId: "", branchId: "", quantity: 0, reorderLevel: 50 });
+      setUpdateReason("");
+      setAdminPassword("");
     },
     onError: (error: Error) => {
       toast({
@@ -234,20 +244,44 @@ export default function AdminInventory() {
         quantity: item.quantity,
         reorderLevel: item.reorder_level,
       });
+      setUpdateReason("");
+      setAdminPassword("");
     } else {
       setEditingId(null);
       setFormData({ productId: "", branchId: "", quantity: 0, reorderLevel: 50 });
+      setUpdateReason("");
+      setAdminPassword("");
     }
     setIsDialogOpen(true);
   };
 
   const handleSaveInventory = () => {
     if (editingId) {
+      if (!updateReason.trim()) {
+        toast({
+          title: "Reason required",
+          description: "Please provide a reason for updating inventory.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (requiresAdminPassword && !adminPassword.trim()) {
+        toast({
+          title: "Admin password required",
+          description: "Enter your admin password to update inventory.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       updateInventoryMutation.mutate({
         id: editingId,
         data: {
           quantity: formData.quantity,
           reorder_level: formData.reorderLevel,
+          updateReason: updateReason.trim(),
+          adminPassword: adminPassword.trim() || undefined,
         },
       });
     } else {
@@ -654,6 +688,29 @@ export default function AdminInventory() {
                               />
                             </div>
 
+                            <div className="space-y-2">
+                              <Label htmlFor="inventory-reason-mobile" className="text-sm">Reason for Update *</Label>
+                              <Textarea
+                                id="inventory-reason-mobile"
+                                value={updateReason}
+                                onChange={(e) => setUpdateReason(e.target.value)}
+                                placeholder="Explain why this inventory is being updated"
+                              />
+                            </div>
+
+                            {requiresAdminPassword && (
+                              <div className="space-y-2">
+                                <Label htmlFor="inventory-admin-password-mobile" className="text-sm">Admin Password *</Label>
+                                <Input
+                                  id="inventory-admin-password-mobile"
+                                  type="password"
+                                  value={adminPassword}
+                                  onChange={(e) => setAdminPassword(e.target.value)}
+                                  placeholder="Enter admin password"
+                                />
+                              </div>
+                            )}
+
                             <div className="flex flex-col sm:flex-row gap-3 pt-4">
                               <Button
                                 onClick={handleSaveInventory}
@@ -847,6 +904,29 @@ export default function AdminInventory() {
                                     }
                                   />
                                 </div>
+
+                                <div className="space-y-2">
+                                  <Label htmlFor="inventory-reason-desktop" className="text-sm">Reason for Update *</Label>
+                                  <Textarea
+                                    id="inventory-reason-desktop"
+                                    value={updateReason}
+                                    onChange={(e) => setUpdateReason(e.target.value)}
+                                    placeholder="Explain why this inventory is being updated"
+                                  />
+                                </div>
+
+                                {requiresAdminPassword && (
+                                  <div className="space-y-2">
+                                    <Label htmlFor="inventory-admin-password-desktop" className="text-sm">Admin Password *</Label>
+                                    <Input
+                                      id="inventory-admin-password-desktop"
+                                      type="password"
+                                      value={adminPassword}
+                                      onChange={(e) => setAdminPassword(e.target.value)}
+                                      placeholder="Enter admin password"
+                                    />
+                                  </div>
+                                )}
 
                                 <div className="flex flex-col sm:flex-row gap-3 pt-4">
                                   <Button

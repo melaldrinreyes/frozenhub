@@ -174,6 +174,11 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
       return;
     }
 
+    if (user.active === false || user.active === 0 || String(user.active).toLowerCase() === "false") {
+      res.status(403).json({ error: "Account is disabled. Please contact an administrator." });
+      return;
+    }
+
     // Accounts created via Google OAuth should continue using Google sign-in.
     if (user.google_id && String(user.password_hash || "").startsWith("oauth-google-")) {
       res.status(401).json({

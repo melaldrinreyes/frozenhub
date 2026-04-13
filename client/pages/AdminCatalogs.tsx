@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -61,6 +62,8 @@ export default function AdminCatalogs() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
+  const [updateReason, setUpdateReason] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     sku: "",
@@ -207,6 +210,8 @@ export default function AdminCatalogs() {
       });
       setImagePreview(product.image || "");
       setSelectedFile(null);
+      setUpdateReason("");
+      setAdminPassword("");
     } else {
       setEditingId(null);
       setFormData({
@@ -222,6 +227,8 @@ export default function AdminCatalogs() {
       });
       setImagePreview("");
       setSelectedFile(null);
+      setUpdateReason("");
+      setAdminPassword("");
     }
     setIsDialogOpen(true);
   };
@@ -262,7 +269,22 @@ export default function AdminCatalogs() {
       }
       const productData = { ...formData, barcode, image: imagePath };
       if (editingId) {
-        updateProductMutation.mutate({ id: editingId, data: productData });
+        if (!updateReason.trim()) {
+          alert("Please provide a reason for updating this product.");
+          return;
+        }
+        if (!adminPassword.trim()) {
+          alert("Admin password is required to update product details.");
+          return;
+        }
+        updateProductMutation.mutate({
+          id: editingId,
+          data: {
+            ...productData,
+            updateReason: updateReason.trim(),
+            adminPassword: adminPassword.trim(),
+          },
+        });
       } else {
         const result = await apiClient.createProduct(productData);
         queryClient.invalidateQueries({ queryKey: ["products"] });
@@ -284,6 +306,8 @@ export default function AdminCatalogs() {
       setSelectedFile(null);
       setImagePreview("");
       setBarcodeError("");
+      setUpdateReason("");
+      setAdminPassword("");
     } catch (error: any) {
       alert(error.message || "Failed to save product");
     } finally {
@@ -323,9 +347,20 @@ export default function AdminCatalogs() {
   const toggleActive = (id: string) => {
     const product = products.find((p: any) => p.id === id);
     if (product) {
-      updateProductMutation.mutate({ 
-        id, 
-        data: { ...product, active: !product.active } 
+      const reason = window.prompt("Reason for changing product status:");
+      if (!reason || !reason.trim()) return;
+
+      const password = window.prompt("Enter admin password to confirm:");
+      if (!password || !password.trim()) return;
+
+      updateProductMutation.mutate({
+        id,
+        data: {
+          ...product,
+          active: !product.active,
+          updateReason: reason.trim(),
+          adminPassword: password.trim(),
+        },
       });
     }
   };
@@ -567,6 +602,32 @@ export default function AdminCatalogs() {
                     />
                   </div>
                 </div>
+
+                {editingId && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="update-reason">Reason for Update *</Label>
+                      <Textarea
+                        id="update-reason"
+                        value={updateReason}
+                        onChange={(e) => setUpdateReason(e.target.value)}
+                        placeholder="Explain why this product is being updated"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="admin-password">Admin Password *</Label>
+                      <Input
+                        id="admin-password"
+                        type="password"
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        placeholder="Enter admin password"
+                        autoComplete="current-password"
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div className="flex gap-3 pt-4">
                   <Button

@@ -130,6 +130,50 @@ async function tableExists(connection: any, tableName: string): Promise<boolean>
   }
 }
 
+async function verifyCurrentUserPassword(
+  connection: any,
+  req: any,
+  password: any
+): Promise<{ valid: boolean; status?: number; body?: any }> {
+  const actorUserId = req.user?.id || req.session?.userId;
+  if (!actorUserId) {
+    return { valid: false, status: 401, body: { error: "Authentication required", requiresPassword: true } };
+  }
+
+  if (!password || String(password).trim().length === 0) {
+    return { valid: false, status: 403, body: { error: "Password verification required", requiresPassword: true } };
+  }
+
+  const [actorRows] = await connection.query(
+    "SELECT password_hash FROM users WHERE id = ? LIMIT 1",
+    [actorUserId]
+  );
+  const actor = (actorRows as any[])[0];
+
+  if (!actor || !actor.password_hash) {
+    return { valid: false, status: 401, body: { error: "Account not found", requiresPassword: true } };
+  }
+
+  const passwordHash = String(actor.password_hash);
+  if (passwordHash.startsWith("oauth-google-")) {
+    return {
+      valid: false,
+      status: 400,
+      body: {
+        error: "Password verification is not available for Google-linked accounts",
+        requiresPassword: true,
+      },
+    };
+  }
+
+  const isPasswordValid = await bcrypt.compare(String(password), passwordHash);
+  if (!isPasswordValid) {
+    return { valid: false, status: 401, body: { error: "Incorrect password", requiresPassword: true } };
+  }
+
+  return { valid: true };
+}
+
 async function upsertDeliveryHistoryRecord(connection: any, saleId: string) {
   const hasDeliveryHistoryTable = await tableExists(connection, "delivery_history");
   if (!hasDeliveryHistoryTable) {
@@ -283,7 +327,19 @@ export const handleCreateProductMySQL: RequestHandler = async (req, res) => {
 
 export const handleUpdateProductMySQL: RequestHandler = async (req, res) => {
   const { id } = req.params;
-  const { name, sku, barcode, category, description, price, cost, image, active } = req.body || {};
+  const {
+    name,
+    sku,
+    barcode,
+    category,
+    description,
+    price,
+    cost,
+    image,
+    active,
+    adminPassword,
+    updateReason,
+  } = req.body || {};
 
   const updates: string[] = [];
   const values: any[] = [];
@@ -333,6 +389,21 @@ export const handleUpdateProductMySQL: RequestHandler = async (req, res) => {
   let connection;
   try {
     connection = await getConnection();
+
+    const normalizedReason = String(updateReason || "").trim();
+    if (!normalizedReason) {
+      res.status(400).json({ error: "Update reason is required" });
+      return;
+    }
+
+    if (req.user?.role === "admin") {
+      const passwordCheck = await verifyCurrentUserPassword(connection, req, adminPassword);
+      if (!passwordCheck.valid) {
+        res.status(passwordCheck.status || 401).json(passwordCheck.body || { error: "Password verification failed" });
+        return;
+      }
+    }
+
     values.push(id);
     const [result] = await connection.query(`UPDATE products SET ${updates.join(", ")} WHERE id = ?`, values);
 
@@ -351,8 +422,8 @@ export const handleUpdateProductMySQL: RequestHandler = async (req, res) => {
       entityType: "product",
       entityId: id,
       entityName: updatedProduct?.name || id,
-      description: `Product ${updatedProduct?.name || id} updated`,
-      metadata: { sku, barcode, category, price, cost, active },
+      description: `Product ${updatedProduct?.name || id} updated. Reason: ${normalizedReason}`,
+      metadata: { sku, barcode, category, price, cost, active, reason: normalizedReason },
       ipAddress: req.ip || null,
       branchId: req.user?.branch_id || null,
     });
@@ -501,6 +572,8 @@ export const handleUpdateInventoryMySQL: RequestHandler = async (req, res) => {
   const body = req.body || {};
   const quantity = body.quantity;
   const reorderLevel = body.reorderLevel ?? body.reorder_level;
+  const adminPassword = body.adminPassword;
+  const updateReason = String(body.updateReason || body.reason || "").trim();
 
   const updates: string[] = [];
   const values: any[] = [];
@@ -514,11 +587,30 @@ export const handleUpdateInventoryMySQL: RequestHandler = async (req, res) => {
     values.push(Math.max(0, Math.floor(toNumber(reorderLevel, 50))));
   }
 
+  if (updates.length === 0) {
+    res.status(400).json({ error: "No fields to update" });
+    return;
+  }
+
+  if (!updateReason) {
+    res.status(400).json({ error: "Update reason is required" });
+    return;
+  }
+
   updates.push("last_stock_check = NOW()");
 
   let connection;
   try {
     connection = await getConnection();
+
+    if (req.user?.role === "admin") {
+      const passwordCheck = await verifyCurrentUserPassword(connection, req, adminPassword);
+      if (!passwordCheck.valid) {
+        res.status(passwordCheck.status || 401).json(passwordCheck.body || { error: "Password verification failed" });
+        return;
+      }
+    }
+
     values.push(id);
     const [result] = await connection.query(`UPDATE inventory SET ${updates.join(", ")} WHERE id = ?`, values);
     if (Number((result as any)?.affectedRows || 0) === 0) {
@@ -545,8 +637,8 @@ export const handleUpdateInventoryMySQL: RequestHandler = async (req, res) => {
       entityType: "inventory",
       entityId: inventoryRecord?.id || id,
       entityName: inventoryRecord?.product_name || id,
-      description: `Inventory updated for ${inventoryRecord?.product_name || id}`,
-      metadata: { quantity, reorder_level: reorderLevel },
+      description: `Inventory updated for ${inventoryRecord?.product_name || id}. Reason: ${updateReason}`,
+      metadata: { quantity, reorder_level: reorderLevel, reason: updateReason },
       ipAddress: req.ip || null,
       branchId: inventoryRecord?.branch_id || req.user?.branch_id || null,
     });
@@ -1040,7 +1132,8 @@ export const handleGetUsersMySQL: RequestHandler = async (req, res) => {
     const [rows] = await connection.query(
       `SELECT u.id, u.name, u.email, u.phone, u.role,
               ${branchExpr} as branch_id,
-            u.created_at,
+              u.active,
+              u.created_at,
               b.name as branch_name
        FROM users u
        ${joinExpr}
@@ -1118,7 +1211,7 @@ export const handleCreateUserMySQL: RequestHandler = async (req, res) => {
 
 export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
   const { id } = req.params;
-  const { name, email, phone, role, branch_id, branchId, password } = req.body || {};
+  const { name, email, phone, role, branch_id, branchId, password, active } = req.body || {};
   const normalizedBranchId = branch_id !== undefined ? branch_id : branchId;
 
   const updates: string[] = [];
@@ -1154,6 +1247,10 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
     updates.push("password_hash = ?");
     values.push(passwordHash);
   }
+  if (active !== undefined) {
+    updates.push("active = ?");
+    values.push(!!active);
+  }
 
   if (updates.length === 0) {
     res.status(400).json({ error: "No fields to update" });
@@ -1164,10 +1261,16 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
   try {
     connection = await getConnection();
     values.push(id);
-    const [beforeRows] = await connection.query("SELECT role FROM users WHERE id = ? LIMIT 1", [id]);
+    const [beforeRows] = await connection.query("SELECT role, active FROM users WHERE id = ? LIMIT 1", [id]);
     const existingUser = (beforeRows as any[])[0];
     if (!existingUser) {
       res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const targetRole = role !== undefined ? normalizeRole(role) : String(existingUser.role);
+    if (targetRole === "rider" && active !== undefined && req.user?.role !== "admin") {
+      res.status(403).json({ error: "Only admins can enable or disable rider accounts" });
       return;
     }
 
@@ -1177,9 +1280,14 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
       return;
     }
 
-    const targetRole = role !== undefined ? normalizeRole(role) : existingUser.role;
-    if (targetRole === "rider" && normalizedBranchId) {
+    const effectiveActive = active !== undefined ? !!active : !!existingUser.active;
+    if (targetRole === "rider" && effectiveActive && normalizedBranchId) {
       await upsertRiderBranchAssignment(connection, id, String(normalizedBranchId), req.user?.id || null);
+    } else if (targetRole === "rider" && !effectiveActive) {
+      await connection.query(
+        "UPDATE rider_branch_assignments SET active = FALSE, updated_at = NOW() WHERE rider_id = ?",
+        [id]
+      );
     } else if (targetRole !== "rider" && String(existingUser.role) === "rider") {
       await connection.query(
         "UPDATE rider_branch_assignments SET active = FALSE, updated_at = NOW() WHERE rider_id = ?",
@@ -1188,7 +1296,7 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
     }
 
     const [rows] = await connection.query(
-      `SELECT u.id, u.name, u.email, u.phone, u.role,
+      `SELECT u.id, u.name, u.email, u.phone, u.role, u.active,
               CASE WHEN u.role = 'rider' THEN COALESCE(rba.branch_id, u.branch_id) ELSE u.branch_id END as branch_id,
               u.created_at
        FROM users u
@@ -1208,7 +1316,14 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
       entityId: id,
       entityName: updatedUser?.name || id,
       description: `User ${updatedUser?.name || id} updated`,
-      metadata: { email, phone, role, branch_id: normalizedBranchId, password_changed: String(password || "").trim().length > 0 },
+      metadata: {
+        email,
+        phone,
+        role,
+        active,
+        branch_id: normalizedBranchId,
+        password_changed: String(password || "").trim().length > 0,
+      },
       ipAddress: req.ip || null,
       branchId: updatedUser?.branch_id || normalizedBranchId || null,
     });

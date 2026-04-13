@@ -109,6 +109,17 @@ export default function AdminUsers() {
     },
   });
 
+  const toggleRiderStatusMutation = useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
+      apiClient.updateUser(id, { active }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (error: any) => {
+      alert(error.message || "Failed to update rider status");
+    },
+  });
+
   // Delete user mutation
   const deleteUserMutation = useMutation({
     mutationFn: (id: string) => apiClient.deleteUser(id),
@@ -142,6 +153,11 @@ export default function AdminUsers() {
 
   const getRoleLabel = (role: string) => {
     return ROLES.find((r) => r.value === role)?.label || role;
+  };
+
+  const isUserActive = (user: any) => {
+    const raw = user?.active;
+    return !(raw === false || raw === 0 || String(raw).toLowerCase() === "false");
   };
 
   const handleOpenDialog = (user?: any) => {
@@ -208,8 +224,17 @@ export default function AdminUsers() {
     }
   };
 
+  const handleToggleRiderStatus = (user: any) => {
+    if (user.role !== "rider") return;
+    const isActive = isUserActive(user);
+    const actionLabel = isActive ? "disable" : "enable";
+    if (confirm(`Are you sure you want to ${actionLabel} rider ${user.name}?`)) {
+      toggleRiderStatusMutation.mutate({ id: user.id, active: !isActive });
+    }
+  };
+
   const adminCount = users.filter((u: any) => u.role === "admin").length;
-  const activeCount = users.length; // All fetched users are considered active
+  const activeCount = users.filter((u: any) => isUserActive(u)).length;
 
   if (isLoading) {
     return (
@@ -560,6 +585,26 @@ export default function AdminUsers() {
                             {user.branch_id ? (branchMap[user.branch_id] || user.branch_id) : "-"}
                           </p>
                         </div>
+                        {user.role === "rider" && (
+                          <div className="col-span-2 bg-white rounded-lg p-3 border border-slate-100">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-medium text-slate-500">Rider Status</p>
+                                <p className="text-sm font-semibold text-slate-900 mt-1">
+                                  {isUserActive(user) ? "Active" : "Disabled"}
+                                </p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant={isUserActive(user) ? "destructive" : "default"}
+                                onClick={() => handleToggleRiderStatus(user)}
+                                disabled={toggleRiderStatusMutation.isPending}
+                              >
+                                {isUserActive(user) ? "Disable" : "Enable"}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                         <div className="col-span-2 bg-white rounded-lg p-3 border border-slate-100">
                           <div className="flex items-center gap-2 mb-2">
                             <Calendar className="w-3.5 h-3.5 text-slate-600" />
@@ -602,6 +647,9 @@ export default function AdminUsers() {
                       Joined
                     </th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">
+                      Status
+                    </th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">
                       Actions
                     </th>
                   </tr>
@@ -629,6 +677,17 @@ export default function AdminUsers() {
                         {new Date(user.created_at).toLocaleDateString()}
                       </td>
                       <td className="py-3 px-4">
+                        <span
+                          className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                            isUserActive(user)
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800"
+                          }`}
+                        >
+                          {isUserActive(user) ? "Active" : "Disabled"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
                         <div className="flex gap-2">
                           <Button
                             size="sm"
@@ -638,6 +697,17 @@ export default function AdminUsers() {
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
+                            {user.role === "rider" && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 px-2 text-xs"
+                                onClick={() => handleToggleRiderStatus(user)}
+                                disabled={toggleRiderStatusMutation.isPending}
+                              >
+                                {isUserActive(user) ? "Disable" : "Enable"}
+                              </Button>
+                            )}
                           <Button
                             size="sm"
                             variant="ghost"
