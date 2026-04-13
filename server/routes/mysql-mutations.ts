@@ -1222,13 +1222,22 @@ export const handleCreateUserMySQL: RequestHandler = async (req, res) => {
   let connection;
   try {
     connection = await getConnection();
+    const hasUserActiveColumn = await ensureUsersActiveColumn(connection);
     const passwordHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
 
-    await connection.query(
-      `INSERT INTO users (id, name, email, phone, password_hash, role, branch_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
-      [id, name, email, phone, passwordHash, normalizedRole, normalizedBranchId]
-    );
+    if (hasUserActiveColumn) {
+      await connection.query(
+        `INSERT INTO users (id, name, email, phone, password_hash, role, branch_id, active, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, NOW())`,
+        [id, name, email, phone, passwordHash, normalizedRole, normalizedBranchId]
+      );
+    } else {
+      await connection.query(
+        `INSERT INTO users (id, name, email, phone, password_hash, role, branch_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [id, name, email, phone, passwordHash, normalizedRole, normalizedBranchId]
+      );
+    }
 
     if (normalizedRole === "rider" && normalizedBranchId) {
       await upsertRiderBranchAssignment(connection, id, String(normalizedBranchId), req.user?.id || null);

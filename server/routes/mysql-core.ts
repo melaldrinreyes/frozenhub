@@ -176,10 +176,10 @@ function getDevFallbackAdmin(): AuthUser {
   };
 }
 
-async function isRiderAssignmentDisabled(connection: any, riderId: string): Promise<boolean> {
+async function getRiderAssignmentDisabledState(connection: any, riderId: string): Promise<boolean | null> {
   try {
     const [tableRows] = await connection.query("SHOW TABLES LIKE 'rider_branch_assignments'");
-    if ((tableRows as any[]).length === 0) return false;
+    if ((tableRows as any[]).length === 0) return null;
 
     const [rows] = await connection.query(
       `SELECT COUNT(*) as total_assignments,
@@ -190,7 +190,7 @@ async function isRiderAssignmentDisabled(connection: any, riderId: string): Prom
     );
 
     const record = (rows as any[])[0];
-    if (!record) return false;
+  if (!record) return null;
 
     const totalAssignments = Number(record.total_assignments || 0);
     const activeAssignments = Number(record.active_assignments || 0);
@@ -200,7 +200,7 @@ async function isRiderAssignmentDisabled(connection: any, riderId: string): Prom
 
     return activeAssignments === 0;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -229,11 +229,15 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
 
     const hasUserActiveColumn = await usersActiveColumnExists(connection);
     const userDisabled = hasUserActiveColumn ? isFalseLike(user.active) : false;
-    const riderDisabled = !hasUserActiveColumn && user.role === "rider"
-      ? await isRiderAssignmentDisabled(connection, String(user.id))
-      : false;
 
-    if (userDisabled || riderDisabled) {
+    let isAccountDisabled = userDisabled;
+    if (String(user.role) === "rider") {
+      const riderAssignmentDisabled = await getRiderAssignmentDisabledState(connection, String(user.id));
+      // For riders, assignment state is the source of truth when available.
+      isAccountDisabled = riderAssignmentDisabled === null ? userDisabled : riderAssignmentDisabled;
+    }
+
+    if (isAccountDisabled) {
       res.status(403).json({ error: "Account is disabled. Please contact an administrator." });
       return;
     }
