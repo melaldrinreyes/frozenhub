@@ -1364,29 +1364,6 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
       }
     }
 
-    const effectiveActive = active !== undefined ? !!active : !!existingUser.active;
-    if (targetRole === "rider" && effectiveActive) {
-      const enableBranchId = normalizedBranchId || existingUser.branch_id || null;
-      if (enableBranchId) {
-        await upsertRiderBranchAssignment(connection, id, String(enableBranchId), req.user?.id || null);
-      } else {
-        await connection.query(
-          "UPDATE rider_branch_assignments SET active = TRUE, updated_at = NOW() WHERE rider_id = ?",
-          [id]
-        );
-      }
-    } else if (targetRole === "rider" && !effectiveActive) {
-      await connection.query(
-        "UPDATE rider_branch_assignments SET active = FALSE, updated_at = NOW() WHERE rider_id = ?",
-        [id]
-      );
-    } else if (targetRole !== "rider" && String(existingUser.role) === "rider") {
-      await connection.query(
-        "UPDATE rider_branch_assignments SET active = FALSE, updated_at = NOW() WHERE rider_id = ?",
-        [id]
-      );
-    }
-
     const hasAssignmentTable = await tableExists(connection, "rider_branch_assignments");
     const hasAssignmentRiderIdColumn = hasAssignmentTable
       ? await tableColumnExists(connection, "rider_branch_assignments", "rider_id")
