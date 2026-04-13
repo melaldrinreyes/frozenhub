@@ -13,6 +13,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -59,6 +69,13 @@ export default function AdminUsers() {
     branchId: "",
   });
   const [password, setPassword] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<
+    | {
+        type: "toggle-rider" | "delete-user";
+        user: any;
+      }
+    | null
+  >(null);
 
   // Fetch users
   const { data: usersData, isLoading } = useQuery({
@@ -219,18 +236,32 @@ export default function AdminUsers() {
   };
 
   const handleDeleteUser = (id: string) => {
-    if (confirm("Are you sure you want to delete this user?")) {
-      deleteUserMutation.mutate(id);
-    }
+    const targetUser = users.find((u: any) => u.id === id);
+    if (!targetUser) return;
+    setConfirmDialog({ type: "delete-user", user: targetUser });
   };
 
   const handleToggleRiderStatus = (user: any) => {
     if (user.role !== "rider") return;
-    const isActive = isUserActive(user);
-    const actionLabel = isActive ? "disable" : "enable";
-    if (confirm(`Are you sure you want to ${actionLabel} rider ${user.name}?`)) {
-      toggleRiderStatusMutation.mutate({ id: user.id, active: !isActive });
+    setConfirmDialog({ type: "toggle-rider", user });
+  };
+
+  const handleConfirmDialogAction = () => {
+    if (!confirmDialog) return;
+
+    if (confirmDialog.type === "toggle-rider") {
+      const riderIsActive = isUserActive(confirmDialog.user);
+      toggleRiderStatusMutation.mutate({
+        id: confirmDialog.user.id,
+        active: !riderIsActive,
+      });
     }
+
+    if (confirmDialog.type === "delete-user") {
+      deleteUserMutation.mutate(confirmDialog.user.id);
+    }
+
+    setConfirmDialog(null);
   };
 
   const adminCount = users.filter((u: any) => u.role === "admin").length;
@@ -757,6 +788,41 @@ export default function AdminUsers() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog
+        open={!!confirmDialog}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDialog(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmDialog?.type === "toggle-rider"
+                ? `${isUserActive(confirmDialog?.user) ? "Disable" : "Enable"} Rider`
+                : "Delete User"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDialog?.type === "toggle-rider"
+                ? `Are you sure you want to ${isUserActive(confirmDialog?.user) ? "disable" : "enable"} rider ${confirmDialog?.user?.name}?`
+                : `Are you sure you want to delete user ${confirmDialog?.user?.name}? This action cannot be undone.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDialogAction}
+              className={confirmDialog?.type === "delete-user" ? "bg-red-600 hover:bg-red-700" : undefined}
+            >
+              {confirmDialog?.type === "toggle-rider"
+                ? isUserActive(confirmDialog?.user)
+                  ? "Disable Rider"
+                  : "Enable Rider"
+                : "Delete User"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AdminLayout>
   );
 }
