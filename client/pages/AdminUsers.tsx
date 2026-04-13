@@ -184,6 +184,11 @@ export default function AdminUsers() {
 
   const getStatusLabel = (user: any) => (isUserActive(user) ? "Enabled" : "Disabled");
 
+  const getStatusActionClasses = (user: any) =>
+    isUserActive(user)
+      ? "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+      : "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100";
+
   const handleOpenDialog = (user?: any) => {
     if (user) {
       setEditingId(user.id);
@@ -638,6 +643,11 @@ export default function AdminUsers() {
                               <Button
                                 size="sm"
                                 variant={isUserActive(user) ? "destructive" : "default"}
+                                className={
+                                  isUserActive(user)
+                                    ? "bg-rose-600 hover:bg-rose-700 text-white"
+                                    : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                }
                                 onClick={() => handleToggleRiderStatus(user)}
                                 disabled={toggleRiderStatusMutation.isPending}
                               >
@@ -739,7 +749,7 @@ export default function AdminUsers() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-8 px-2 text-xs"
+                                className={`h-8 px-2 text-xs font-semibold ${getStatusActionClasses(user)}`}
                                 onClick={() => handleToggleRiderStatus(user)}
                                 disabled={toggleRiderStatusMutation.isPending}
                               >
