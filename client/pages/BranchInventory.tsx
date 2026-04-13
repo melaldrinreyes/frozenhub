@@ -103,6 +103,7 @@ export default function BranchInventory() {
   const [selectedItem, setSelectedItem] = useState<Inventory | null>(null);
   const [adjustmentQty, setAdjustmentQty] = useState(0);
   const [adjustmentReason, setAdjustmentReason] = useState("");
+  const [adjustmentPassword, setAdjustmentPassword] = useState("");
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showAvailabilityDialog, setShowAvailabilityDialog] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string>("");
@@ -110,8 +111,12 @@ export default function BranchInventory() {
 
   // Update inventory mutation
   const updateMutation = useMutation({
-    mutationFn: async (data: { id: string; quantity: number }) => {
-      return await apiClient.updateInventory(data.id, { quantity: data.quantity });
+    mutationFn: async (data: { id: string; quantity: number; updateReason: string; adminPassword: string }) => {
+      return await apiClient.updateInventory(data.id, {
+        quantity: data.quantity,
+        updateReason: data.updateReason,
+        adminPassword: data.adminPassword,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
@@ -161,6 +166,7 @@ export default function BranchInventory() {
     setSelectedItem(item);
     setAdjustmentQty(item.quantity);
     setAdjustmentReason("");
+    setAdjustmentPassword("");
     setIsDialogOpen(true);
   };
 
@@ -176,9 +182,29 @@ export default function BranchInventory() {
       return;
     }
 
+    if (!adjustmentReason.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Reason required",
+        description: "Please provide a reason for the inventory adjustment.",
+      });
+      return;
+    }
+
+    if (!adjustmentPassword.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Password required",
+        description: "Please enter your password to confirm this adjustment.",
+      });
+      return;
+    }
+
     updateMutation.mutate({
       id: selectedItem.id,
       quantity: adjustmentQty,
+      updateReason: adjustmentReason.trim(),
+      adminPassword: adjustmentPassword,
     });
   };
 
@@ -500,7 +526,7 @@ export default function BranchInventory() {
 
                                 <div className="space-y-2">
                                   <Label htmlFor="reason">
-                                    Reason (Optional)
+                                    Reason for Adjustment *
                                   </Label>
                                   <Input
                                     id="reason"
@@ -509,6 +535,19 @@ export default function BranchInventory() {
                                       setAdjustmentReason(e.target.value)
                                     }
                                     placeholder="e.g., Stock count, Damaged goods, etc."
+                                  />
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label htmlFor="adjust-password">
+                                    Confirm Password *
+                                  </Label>
+                                  <Input
+                                    id="adjust-password"
+                                    type="password"
+                                    value={adjustmentPassword}
+                                    onChange={(e) => setAdjustmentPassword(e.target.value)}
+                                    placeholder="Enter your account password"
                                   />
                                 </div>
 
@@ -672,7 +711,7 @@ export default function BranchInventory() {
 
                               <div className="space-y-2">
                                 <Label htmlFor="reason-mobile">
-                                  Reason (Optional)
+                                  Reason for Adjustment *
                                 </Label>
                                 <Input
                                   id="reason-mobile"
@@ -681,6 +720,19 @@ export default function BranchInventory() {
                                     setAdjustmentReason(e.target.value)
                                   }
                                   placeholder="e.g., Stock count, Damaged goods, etc."
+                                />
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label htmlFor="adjust-password-mobile">
+                                  Confirm Password *
+                                </Label>
+                                <Input
+                                  id="adjust-password-mobile"
+                                  type="password"
+                                  value={adjustmentPassword}
+                                  onChange={(e) => setAdjustmentPassword(e.target.value)}
+                                  placeholder="Enter your account password"
                                 />
                               </div>
 

@@ -641,7 +641,7 @@ export const handleUpdateInventoryMySQL: RequestHandler = async (req, res) => {
     transactionStarted = true;
 
     const [currentRows] = await connection.query(
-      `SELECT id, product_id, branch_id, quantity
+      `SELECT id, product_id, branch_id, quantity, reorder_level
        FROM inventory
        WHERE id = ?
        LIMIT 1
@@ -656,7 +656,8 @@ export const handleUpdateInventoryMySQL: RequestHandler = async (req, res) => {
       return;
     }
 
-    if (req.user?.role === "admin") {
+    const effectiveRole = req.user?.role || req.session?.user?.role || req.session?.userRole;
+    if (["admin", "branch_admin", "pos_operator"].includes(String(effectiveRole || ""))) {
       const passwordCheck = await verifyCurrentUserPassword(connection, req, adminPassword);
       if (!passwordCheck.valid) {
         await connection.rollback();
@@ -720,6 +721,16 @@ export const handleUpdateInventoryMySQL: RequestHandler = async (req, res) => {
     );
 
     const inventoryRecord = (rows as any[])[0];
+    const previousQty = Math.max(0, Math.floor(toNumber(currentInventory.quantity, 0)));
+    const nextQty = quantity !== undefined
+      ? Math.max(0, Math.floor(toNumber(quantity, 0)))
+      : Math.max(0, Math.floor(toNumber(inventoryRecord?.quantity, previousQty)));
+    const previousReorderLevel = Math.max(0, Math.floor(toNumber(currentInventory.reorder_level, 0)));
+    const nextReorderLevel = reorderLevel !== undefined
+      ? Math.max(0, Math.floor(toNumber(reorderLevel, previousReorderLevel)))
+      : Math.max(0, Math.floor(toNumber(inventoryRecord?.reorder_level, previousReorderLevel)));
+    const resolvedLogBranchId = currentInventory?.branch_id || inventoryRecord?.branch_id || req.user?.branch_id || null;
+
     await logActivity(connection, {
       userId: req.user?.id || null,
       userName: req.user?.name || null,
@@ -729,9 +740,16 @@ export const handleUpdateInventoryMySQL: RequestHandler = async (req, res) => {
       entityId: inventoryRecord?.id || id,
       entityName: inventoryRecord?.product_name || id,
       description: `Inventory updated for ${inventoryRecord?.product_name || id}. Reason: ${updateReason}`,
-      metadata: { quantity, reorder_level: reorderLevel, reason: updateReason },
+      metadata: {
+        reason: updateReason,
+        previous_quantity: previousQty,
+        new_quantity: nextQty,
+        quantity_delta: nextQty - previousQty,
+        previous_reorder_level: previousReorderLevel,
+        new_reorder_level: nextReorderLevel,
+      },
       ipAddress: req.ip || null,
-      branchId: inventoryRecord?.branch_id || req.user?.branch_id || null,
+      branchId: resolvedLogBranchId,
     });
 
     await connection.commit();
