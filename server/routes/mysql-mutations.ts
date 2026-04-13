@@ -1143,24 +1143,25 @@ export const handleGetUsersMySQL: RequestHandler = async (req, res) => {
     const hasAssignmentBranchColumn = hasAssignmentTable
       ? await tableColumnExists(connection, "rider_branch_assignments", "branch_id")
       : false;
-    const canUseAssignmentJoin =
-      hasAssignmentTable && hasAssignmentRiderIdColumn && hasAssignmentActiveColumn && hasAssignmentBranchColumn;
+    const canUseAssignmentForActive =
+      hasAssignmentTable && hasAssignmentRiderIdColumn && hasAssignmentActiveColumn;
+    const canUseAssignmentForBranch =
+      canUseAssignmentForActive && hasAssignmentBranchColumn;
 
-    const assignmentJoin = canUseAssignmentJoin
+    const assignmentJoin = canUseAssignmentForActive
       ? `LEFT JOIN (
            SELECT rider_id,
-                  MAX(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as has_active,
-                  MAX(CASE WHEN active = TRUE THEN branch_id ELSE NULL END) as active_branch_id
+                  MAX(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as has_active${canUseAssignmentForBranch ? ",\n                  MAX(CASE WHEN active = TRUE THEN branch_id ELSE NULL END) as active_branch_id" : ""}
            FROM rider_branch_assignments
            GROUP BY rider_id
          ) rba ON rba.rider_id = u.id`
       : "";
-    const branchExpr = canUseAssignmentJoin
+    const branchExpr = canUseAssignmentForBranch
       ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.active_branch_id, u.branch_id) ELSE u.branch_id END"
       : "u.branch_id";
     const activeExpr = hasUserActiveColumn
       ? "IF(CAST(u.active AS UNSIGNED) = 1, 1, 0)"
-      : canUseAssignmentJoin
+      : canUseAssignmentForActive
         ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.has_active, TRUE) ELSE TRUE END"
         : "TRUE";
 
@@ -1319,7 +1320,7 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
 
     values.push(id);
     const [beforeRows] = await connection.query(
-      `SELECT role, ${hasUserActiveColumn ? "active" : "TRUE as active"} FROM users WHERE id = ? LIMIT 1`,
+      `SELECT role, branch_id, ${hasUserActiveColumn ? "active" : "TRUE as active"} FROM users WHERE id = ? LIMIT 1`,
       [id]
     );
     const existingUser = (beforeRows as any[])[0];
@@ -1357,8 +1358,16 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
     }
 
     const effectiveActive = active !== undefined ? !!active : !!existingUser.active;
-    if (targetRole === "rider" && effectiveActive && normalizedBranchId) {
-      await upsertRiderBranchAssignment(connection, id, String(normalizedBranchId), req.user?.id || null);
+    if (targetRole === "rider" && effectiveActive) {
+      const enableBranchId = normalizedBranchId || existingUser.branch_id || null;
+      if (enableBranchId) {
+        await upsertRiderBranchAssignment(connection, id, String(enableBranchId), req.user?.id || null);
+      } else {
+        await connection.query(
+          "UPDATE rider_branch_assignments SET active = TRUE, updated_at = NOW() WHERE rider_id = ?",
+          [id]
+        );
+      }
     } else if (targetRole === "rider" && !effectiveActive) {
       await connection.query(
         "UPDATE rider_branch_assignments SET active = FALSE, updated_at = NOW() WHERE rider_id = ?",
@@ -1381,24 +1390,25 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
     const hasAssignmentBranchColumn = hasAssignmentTable
       ? await tableColumnExists(connection, "rider_branch_assignments", "branch_id")
       : false;
-    const canUseAssignmentJoin =
-      hasAssignmentTable && hasAssignmentRiderIdColumn && hasAssignmentActiveColumn && hasAssignmentBranchColumn;
+    const canUseAssignmentForActive =
+      hasAssignmentTable && hasAssignmentRiderIdColumn && hasAssignmentActiveColumn;
+    const canUseAssignmentForBranch =
+      canUseAssignmentForActive && hasAssignmentBranchColumn;
 
-    const assignmentJoin = canUseAssignmentJoin
+    const assignmentJoin = canUseAssignmentForActive
       ? `LEFT JOIN (
            SELECT rider_id,
-                  MAX(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as has_active,
-                  MAX(CASE WHEN active = TRUE THEN branch_id ELSE NULL END) as active_branch_id
+                  MAX(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as has_active${canUseAssignmentForBranch ? ",\n                  MAX(CASE WHEN active = TRUE THEN branch_id ELSE NULL END) as active_branch_id" : ""}
            FROM rider_branch_assignments
            GROUP BY rider_id
          ) rba ON rba.rider_id = u.id`
       : "";
     const selectActiveExpr = hasUserActiveColumn
       ? "IF(CAST(u.active AS UNSIGNED) = 1, 1, 0)"
-      : canUseAssignmentJoin
+      : canUseAssignmentForActive
         ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.has_active, TRUE) ELSE TRUE END"
         : "TRUE";
-    const selectBranchExpr = canUseAssignmentJoin
+    const selectBranchExpr = canUseAssignmentForBranch
       ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.active_branch_id, u.branch_id) ELSE u.branch_id END"
       : "u.branch_id";
 
