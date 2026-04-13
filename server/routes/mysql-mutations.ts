@@ -997,6 +997,11 @@ export const handleGetProductAvailabilityMySQL: RequestHandler = async (req, res
   let connection;
   try {
     connection = await getConnection();
+
+    const effectiveRole = req.user?.role || req.session?.user?.role || req.session?.userRole;
+    const effectiveBranchId = req.user?.branch_id || req.session?.user?.branch_id || null;
+    const isBranchScopedRole = ["branch_admin", "pos_operator", "rider"].includes(String(effectiveRole || ""));
+
     const [productRows] = await connection.query(
       `SELECT id, name, price, image FROM products WHERE id = ? LIMIT 1`,
       [productId]
@@ -1007,14 +1012,42 @@ export const handleGetProductAvailabilityMySQL: RequestHandler = async (req, res
       return;
     }
 
-    const [invRows] = await connection.query(
-      `SELECT i.id, i.branch_id, i.quantity, i.reorder_level, b.name as branch_name
-       FROM inventory i
-       INNER JOIN branches b ON b.id = i.branch_id
-       WHERE i.product_id = ?
-       ORDER BY b.name ASC`,
-      [productId]
-    );
+    let invRows: any;
+    if (isBranchScopedRole) {
+      if (!effectiveBranchId) {
+        res.json({
+          product_id: product.id,
+          product_name: product.name,
+          price: toNumber(product.price, 0),
+          image: product.image,
+          total_quantity: 0,
+          branches_in_stock: 0,
+          branches_low_stock: 0,
+          total_branches: 0,
+          inventory: [],
+          scoped_to_branch: true,
+        });
+        return;
+      }
+
+      [invRows] = await connection.query(
+        `SELECT i.id, i.branch_id, i.quantity, i.reorder_level, b.name as branch_name
+         FROM inventory i
+         INNER JOIN branches b ON b.id = i.branch_id
+         WHERE i.product_id = ? AND i.branch_id = ?
+         ORDER BY b.name ASC`,
+        [productId, effectiveBranchId]
+      );
+    } else {
+      [invRows] = await connection.query(
+        `SELECT i.id, i.branch_id, i.quantity, i.reorder_level, b.name as branch_name
+         FROM inventory i
+         INNER JOIN branches b ON b.id = i.branch_id
+         WHERE i.product_id = ?
+         ORDER BY b.name ASC`,
+        [productId]
+      );
+    }
 
     const inventory = invRows as any[];
     const totalQuantity = inventory.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
@@ -1031,6 +1064,7 @@ export const handleGetProductAvailabilityMySQL: RequestHandler = async (req, res
       branches_low_stock: branchesLowStock,
       total_branches: inventory.length,
       inventory,
+      scoped_to_branch: isBranchScopedRole,
     });
   } catch (error) {
     console.error("MySQL product availability error:", error);

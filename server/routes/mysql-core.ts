@@ -1008,7 +1008,18 @@ export const handleGetInventoryMySQL: RequestHandler = async (req, res) => {
     const params: any[] = [];
     let where = "";
 
-    if (branchId) {
+    const effectiveRole = req.user?.role || req.session?.user?.role || req.session?.userRole;
+    const effectiveBranchId = req.user?.branch_id || req.session?.user?.branch_id || null;
+    const isBranchScopedRole = ["branch_admin", "pos_operator", "rider"].includes(String(effectiveRole || ""));
+
+    if (isBranchScopedRole) {
+      if (!effectiveBranchId) {
+        res.json({ inventory: [] });
+        return;
+      }
+      where = "WHERE i.branch_id = ?";
+      params.push(effectiveBranchId);
+    } else if (branchId) {
       where = "WHERE i.branch_id = ?";
       params.push(branchId);
     }

@@ -58,7 +58,9 @@ export function ProductAvailabilityDialog({
             Product Availability
           </DialogTitle>
           <DialogDescription>
-            View inventory levels across all branch locations
+            {data?.scoped_to_branch
+              ? "View inventory level for your branch location"
+              : "View inventory levels across all branch locations"}
           </DialogDescription>
         </DialogHeader>
 

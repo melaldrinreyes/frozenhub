@@ -388,6 +388,7 @@ class ApiClient {
       branches_low_stock: number;
       total_branches: number;
       inventory: any[];
+      scoped_to_branch?: boolean;
     }>(`/inventory/product/${productId}`);
   }
 
