@@ -195,6 +195,19 @@ export default function AdminUsers() {
     if (typeof raw === "boolean") return raw;
     if (typeof raw === "number") return raw === 1;
 
+    // Handle MySQL BIT values serialized as Buffer-like objects.
+    if (typeof raw === "object" && raw !== null) {
+      const maybeBufferArray =
+        Array.isArray((raw as any).data) ? (raw as any).data :
+        Array.isArray(raw) ? raw :
+        raw instanceof Uint8Array ? Array.from(raw) :
+        null;
+
+      if (maybeBufferArray && maybeBufferArray.length > 0) {
+        return Number(maybeBufferArray[0]) === 1;
+      }
+    }
+
     const normalized = String(raw).trim().toLowerCase();
     if (["1", "true", "yes", "enabled"].includes(normalized)) return true;
     if (["0", "false", "no", "disabled"].includes(normalized)) return false;

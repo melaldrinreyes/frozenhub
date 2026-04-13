@@ -1159,7 +1159,7 @@ export const handleGetUsersMySQL: RequestHandler = async (req, res) => {
       ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.active_branch_id, u.branch_id) ELSE u.branch_id END"
       : "u.branch_id";
     const activeExpr = hasUserActiveColumn
-      ? "u.active"
+      ? "IF(CAST(u.active AS UNSIGNED) = 1, 1, 0)"
       : canUseAssignmentJoin
         ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.has_active, TRUE) ELSE TRUE END"
         : "TRUE";
@@ -1394,7 +1394,7 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
          ) rba ON rba.rider_id = u.id`
       : "";
     const selectActiveExpr = hasUserActiveColumn
-      ? "u.active"
+      ? "IF(CAST(u.active AS UNSIGNED) = 1, 1, 0)"
       : canUseAssignmentJoin
         ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.has_active, TRUE) ELSE TRUE END"
         : "TRUE";
