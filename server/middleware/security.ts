@@ -3,8 +3,12 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import helmet from "helmet";
 import hpp from "hpp";
 
+function requestIp(req: any) {
+  return req.ip || req.socket?.remoteAddress || "";
+}
+
 function getLoginThrottleKey(req: any) {
-  const ip = ipKeyGenerator(req.ip || req.socket?.remoteAddress || "unknown");
+  const ip = ipKeyGenerator(requestIp(req) || "unknown");
   const identifierRaw = req?.body?.identifier || req?.body?.username || req?.body?.email || "anonymous";
   const identifier = String(identifierRaw).trim().toLowerCase();
   return `${ip}:${identifier || "anonymous"}`;
@@ -43,7 +47,7 @@ export const loginRateLimiter = rateLimit({
   skipSuccessfulRequests: true, // Don't count successful logins
   skip: (req) => {
     // Skip rate limiting in development for localhost
-    return process.env.NODE_ENV === "development" && req.ip === "::1";
+    return process.env.NODE_ENV === "development" && requestIp(req) === "::1";
   },
 });
 
@@ -58,7 +62,7 @@ export const signupRateLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => {
     // Skip rate limiting in development for localhost
-    return process.env.NODE_ENV === "development" && req.ip === "::1";
+    return process.env.NODE_ENV === "development" && requestIp(req) === "::1";
   },
 });
 
@@ -73,7 +77,8 @@ export const apiRateLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => {
     // Skip rate limiting in development for localhost
-    return process.env.NODE_ENV === "development" && (req.ip === "::1" || req.ip === "127.0.0.1");
+    const ip = requestIp(req);
+    return process.env.NODE_ENV === "development" && (ip === "::1" || ip === "127.0.0.1");
   },
 });
 
@@ -88,7 +93,7 @@ export const publicRateLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => {
     // Skip rate limiting in development for localhost
-    return process.env.NODE_ENV === "development" && req.ip === "::1";
+    return process.env.NODE_ENV === "development" && requestIp(req) === "::1";
   },
 });
 
@@ -149,7 +154,7 @@ export const securityLogger: RequestHandler = (req, res, next) => {
     timestamp: new Date().toISOString(),
     method: req.method,
     path: req.path,
-    ip: req.ip || req.socket.remoteAddress,
+    ip: requestIp(req),
     userAgent: req.get("user-agent"),
     userId: req.session?.userId || "anonymous",
   };

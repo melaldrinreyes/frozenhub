@@ -50,6 +50,17 @@ interface SaleItem {
   subtotal: number;
 }
 
+interface BranchSaleRow {
+  id: string;
+  sale_date: any;
+  items_count?: number;
+  items?: any[];
+  total_amount?: number | string;
+  payment_method?: string;
+  status?: string;
+  assigned_rider_name?: string | null;
+}
+
 function formatDateLocal(value: Date) {
   const year = value.getFullYear();
   const month = String(value.getMonth() + 1).padStart(2, "0");
@@ -126,7 +137,7 @@ export default function BranchSales() {
     enabled: !!user && user.role === "branch_admin",
   });
 
-  const sales = salesData?.sales || [];
+  const sales: BranchSaleRow[] = (salesData?.sales as BranchSaleRow[] | undefined) || [];
   const chartData = salesTrend?.trend || [];
 
   const { data: expandedSaleItems = [] } = useQuery({

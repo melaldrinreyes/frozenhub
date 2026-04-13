@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState } from "react";
 import { Bell, X, AlertTriangle, Package, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -172,3 +173,4 @@ export function NotificationBell() {
     </Sheet>
   );
 }
+

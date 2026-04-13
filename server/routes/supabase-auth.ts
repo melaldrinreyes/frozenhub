@@ -2,7 +2,7 @@ import { RequestHandler } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { getConnection } from "../db";
 import { generateToken } from "../middleware/jwt";
-import { AuthUser } from "../../shared/api";
+import type { AuthUser } from "../middleware/auth";
 
 interface SupabaseCallbackRequest {
   accessToken: string;
@@ -45,10 +45,11 @@ export const handleSupabaseCallback: RequestHandler = async (req, res) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const authClient = supabase.auth as any;
     const {
       data: { user: supabaseUser },
       error: userError,
-    } = await supabase.auth.getUser(accessToken);
+    } = await authClient.getUser(accessToken);
 
     if (userError || !supabaseUser?.email) {
       return res.status(401).json({
@@ -136,7 +137,7 @@ export const handleSupabaseCallback: RequestHandler = async (req, res) => {
       name: userRow.name || "",
       email: userRow.email,
       phone: userRow.phone || "",
-      role: userRow.role,
+      role: userRow.role as AuthUser["role"],
       branch_id: userRow.branch_id,
       created_at: userRow.created_at,
     };

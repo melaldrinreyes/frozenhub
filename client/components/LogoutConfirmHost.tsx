@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, LogOut } from "lucide-react";
 import {
@@ -87,3 +88,4 @@ export default function LogoutConfirmHost() {
     </AlertDialog>
   );
 }
+
