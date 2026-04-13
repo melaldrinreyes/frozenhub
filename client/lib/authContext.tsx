@@ -3,10 +3,19 @@ import {
   useContext,
   useState,
   useEffect,
+  Fragment,
   ReactNode,
 } from "react";
 import { apiClient } from "./apiClient";
-import { toast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export interface AuthUser {
   id: string;
@@ -38,6 +47,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [disabledModalMessage, setDisabledModalMessage] = useState<string>("");
 
   // Load user from session on mount
   useEffect(() => {
@@ -65,11 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
 
       if (reason.toLowerCase().includes("disabled")) {
-        toast({
-          title: "Account Disabled",
-          description: "Na-disable na ang account mo. Please contact admin.",
-          variant: "destructive",
-        });
+        setDisabledModalMessage(
+          "Your account has been disabled. Please contact an administrator."
+        );
       }
     };
 
@@ -133,19 +141,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        login,
-        signup,
-        logout,
-        refreshUser,
-        isAuthenticated: !!user,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+    <Fragment>
+      <AuthContext.Provider
+        value={{
+          user,
+          isLoading,
+          login,
+          signup,
+          logout,
+          refreshUser,
+          isAuthenticated: !!user,
+        }}
+      >
+        {children}
+      </AuthContext.Provider>
+
+      <AlertDialog
+        open={Boolean(disabledModalMessage)}
+        onOpenChange={(open) => {
+          if (!open) setDisabledModalMessage("");
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-700">Account Disabled</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-700 leading-relaxed">
+              {disabledModalMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={() => setDisabledModalMessage("")}
+            >
+              I Understand
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Fragment>
   );
 }
 
