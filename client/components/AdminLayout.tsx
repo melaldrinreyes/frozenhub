@@ -190,7 +190,7 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="p-6 border-b border-gold-500/20">
-            <Link to="/" className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
               {companyLogo ? (
                 <img src={companyLogo} alt={companyName} className="w-8 h-8 object-contain" />
               ) : (
@@ -200,7 +200,7 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
                 </div>
               )}
               <h1 className="text-xl font-bold text-gold-400">{companyName}</h1>
-            </Link>
+            </div>
           </div>
 
           {/* Role Badge */}
