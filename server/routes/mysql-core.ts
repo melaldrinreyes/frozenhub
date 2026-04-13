@@ -151,6 +151,29 @@ function getDevFallbackAdmin(): AuthUser {
   };
 }
 
+async function isRiderAssignmentDisabled(connection: any, riderId: string): Promise<boolean> {
+  try {
+    const [tableRows] = await connection.query("SHOW TABLES LIKE 'rider_branch_assignments'");
+    if ((tableRows as any[]).length === 0) return false;
+
+    const [rows] = await connection.query(
+      `SELECT active
+       FROM rider_branch_assignments
+       WHERE rider_id = ?
+       ORDER BY updated_at DESC, created_at DESC
+       LIMIT 1`,
+      [riderId]
+    );
+
+    const record = (rows as any[])[0];
+    if (!record) return false;
+
+    return record.active === false || record.active === 0 || String(record.active).toLowerCase() === "false";
+  } catch {
+    return false;
+  }
+}
+
 export const handleLoginMySQL: RequestHandler = async (req, res) => {
   const { email, password, username, identifier } = req.body;
   const loginIdentifier = String(identifier || username || email || "").trim();
@@ -174,7 +197,11 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
       return;
     }
 
-    if (user.active === false || user.active === 0 || String(user.active).toLowerCase() === "false") {
+    const userDisabled =
+      user.active === false || user.active === 0 || String(user.active).toLowerCase() === "false";
+    const riderDisabled = user.role === "rider" ? await isRiderAssignmentDisabled(connection, String(user.id)) : false;
+
+    if (userDisabled || riderDisabled) {
       res.status(403).json({ error: "Account is disabled. Please contact an administrator." });
       return;
     }

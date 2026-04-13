@@ -1128,9 +1128,13 @@ export const handleGetUsersMySQL: RequestHandler = async (req, res) => {
     const branchExpr = hasAssignmentTable
       ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.branch_id, u.branch_id) ELSE u.branch_id END"
       : "u.branch_id";
-    const activeExpr = hasUserActiveColumn ? "u.active" : "TRUE";
+    const activeExpr = hasUserActiveColumn
+      ? "u.active"
+      : hasAssignmentTable
+        ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.active, TRUE) ELSE TRUE END"
+        : "TRUE";
     const joinExpr = hasAssignmentTable
-      ? "LEFT JOIN rider_branch_assignments rba ON rba.rider_id = u.id AND rba.active = TRUE"
+      ? "LEFT JOIN rider_branch_assignments rba ON rba.rider_id = u.id"
       : "";
 
     const clauses: string[] = [];
@@ -1276,7 +1280,7 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
     values.push(!!active);
   }
 
-  if (updates.length === 0) {
+  if (updates.length === 0 && active === undefined) {
     res.status(400).json({ error: "No fields to update" });
     return;
   }
@@ -1285,11 +1289,6 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
   try {
     connection = await getConnection();
     const hasUserActiveColumn = await ensureUsersActiveColumn(connection);
-
-    if (active !== undefined && !hasUserActiveColumn) {
-      res.status(500).json({ error: "User status update unavailable until users.active column is ready" });
-      return;
-    }
 
     values.push(id);
     const [beforeRows] = await connection.query(
@@ -1308,10 +1307,26 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
       return;
     }
 
-    const [result] = await connection.query(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`, values);
-    if (Number((result as any)?.affectedRows || 0) === 0) {
-      res.status(404).json({ error: "User not found" });
-      return;
+    // If users.active does not exist yet, allow rider status updates via rider assignment table.
+    if (active !== undefined && !hasUserActiveColumn) {
+      const activeUpdateIndex = updates.indexOf("active = ?");
+      if (activeUpdateIndex >= 0) {
+        updates.splice(activeUpdateIndex, 1);
+        values.splice(activeUpdateIndex, 1);
+      }
+
+      if (targetRole !== "rider") {
+        res.status(500).json({ error: "User status update unavailable until users.active column is ready" });
+        return;
+      }
+    }
+
+    if (updates.length > 0) {
+      const [result] = await connection.query(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`, values);
+      if (Number((result as any)?.affectedRows || 0) === 0) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
     }
 
     const effectiveActive = active !== undefined ? !!active : !!existingUser.active;
@@ -1329,12 +1344,19 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
       );
     }
 
+    const hasAssignmentTable = await tableExists(connection, "rider_branch_assignments");
+    const selectActiveExpr = hasUserActiveColumn
+      ? "u.active"
+      : hasAssignmentTable
+        ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.active, TRUE) ELSE TRUE END"
+        : "TRUE";
+
     const [rows] = await connection.query(
-      `SELECT u.id, u.name, u.email, u.phone, u.role, u.active,
+      `SELECT u.id, u.name, u.email, u.phone, u.role, ${selectActiveExpr} as active,
               CASE WHEN u.role = 'rider' THEN COALESCE(rba.branch_id, u.branch_id) ELSE u.branch_id END as branch_id,
               u.created_at
        FROM users u
-       LEFT JOIN rider_branch_assignments rba ON rba.rider_id = u.id AND rba.active = TRUE
+       LEFT JOIN rider_branch_assignments rba ON rba.rider_id = u.id
        WHERE u.id = ?
        LIMIT 1`,
       [id]
