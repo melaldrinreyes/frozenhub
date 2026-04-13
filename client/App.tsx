@@ -133,11 +133,7 @@ const App = () => (
             />
             <Route
               path="/admin/cms"
-              element={
-                <ProtectedRoute allowedRoles={["admin"]}>
-                  <AdminCMS />
-                </ProtectedRoute>
-              }
+              element={<AdminCMS />}
             />
             <Route
               path="/admin/transfer-logs"
