@@ -129,7 +129,24 @@ export default function AdminUsers() {
   const toggleRiderStatusMutation = useMutation({
     mutationFn: ({ id, active }: { id: string; active: boolean }) =>
       apiClient.updateUser(id, { active }),
-    onSuccess: () => {
+    onSuccess: (response: any, variables) => {
+      queryClient.setQueryData(["users"], (oldData: any) => {
+        if (!oldData?.users) return oldData;
+
+        const returnedUser = response?.user;
+        return {
+          ...oldData,
+          users: oldData.users.map((user: any) =>
+            user.id === variables.id
+              ? {
+                  ...user,
+                  ...(returnedUser || {}),
+                  active: returnedUser?.active ?? variables.active,
+                }
+              : user
+          ),
+        };
+      });
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (error: any) => {

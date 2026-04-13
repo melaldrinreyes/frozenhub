@@ -1125,17 +1125,23 @@ export const handleGetUsersMySQL: RequestHandler = async (req, res) => {
     const hasUserActiveColumn = await ensureUsersActiveColumn(connection);
 
     const hasAssignmentTable = await tableExists(connection, "rider_branch_assignments");
+    const assignmentJoin = hasAssignmentTable
+      ? `LEFT JOIN (
+           SELECT rider_id,
+                  MAX(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as has_active,
+                  MAX(CASE WHEN active = TRUE THEN branch_id ELSE NULL END) as active_branch_id
+           FROM rider_branch_assignments
+           GROUP BY rider_id
+         ) rba ON rba.rider_id = u.id`
+      : "";
     const branchExpr = hasAssignmentTable
-      ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.branch_id, u.branch_id) ELSE u.branch_id END"
+      ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.active_branch_id, u.branch_id) ELSE u.branch_id END"
       : "u.branch_id";
     const activeExpr = hasUserActiveColumn
       ? "u.active"
       : hasAssignmentTable
-        ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.active, TRUE) ELSE TRUE END"
+        ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.has_active, TRUE) ELSE TRUE END"
         : "TRUE";
-    const joinExpr = hasAssignmentTable
-      ? "LEFT JOIN rider_branch_assignments rba ON rba.rider_id = u.id"
-      : "";
 
     const clauses: string[] = [];
     const values: any[] = [];
@@ -1164,7 +1170,7 @@ export const handleGetUsersMySQL: RequestHandler = async (req, res) => {
               u.created_at,
               b.name as branch_name
        FROM users u
-       ${joinExpr}
+      ${assignmentJoin}
        LEFT JOIN branches b ON b.id = ${branchExpr}
        ${where}
        ORDER BY u.created_at DESC`,
@@ -1345,18 +1351,30 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
     }
 
     const hasAssignmentTable = await tableExists(connection, "rider_branch_assignments");
+    const assignmentJoin = hasAssignmentTable
+      ? `LEFT JOIN (
+           SELECT rider_id,
+                  MAX(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as has_active,
+                  MAX(CASE WHEN active = TRUE THEN branch_id ELSE NULL END) as active_branch_id
+           FROM rider_branch_assignments
+           GROUP BY rider_id
+         ) rba ON rba.rider_id = u.id`
+      : "";
     const selectActiveExpr = hasUserActiveColumn
       ? "u.active"
       : hasAssignmentTable
-        ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.active, TRUE) ELSE TRUE END"
+        ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.has_active, TRUE) ELSE TRUE END"
         : "TRUE";
+    const selectBranchExpr = hasAssignmentTable
+      ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.active_branch_id, u.branch_id) ELSE u.branch_id END"
+      : "u.branch_id";
 
     const [rows] = await connection.query(
       `SELECT u.id, u.name, u.email, u.phone, u.role, ${selectActiveExpr} as active,
-              CASE WHEN u.role = 'rider' THEN COALESCE(rba.branch_id, u.branch_id) ELSE u.branch_id END as branch_id,
+              ${selectBranchExpr} as branch_id,
               u.created_at
        FROM users u
-       LEFT JOIN rider_branch_assignments rba ON rba.rider_id = u.id
+       ${assignmentJoin}
        WHERE u.id = ?
        LIMIT 1`,
       [id]
