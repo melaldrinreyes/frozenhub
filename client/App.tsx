@@ -64,6 +64,8 @@ const App = () => (
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/deals" element={<Navigate to="/" replace />} />
             <Route path="/shop" element={<Navigate to="/" replace />} />
+            <Route path="/about" element={<Navigate to="/#about" replace />} />
+            <Route path="/categories" element={<Navigate to="/#categories" replace />} />
             <Route path="*" element={<NotFound />} />
 
             {/* System Admin Routes */}
