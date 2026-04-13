@@ -130,6 +130,15 @@ async function tableExists(connection: any, tableName: string): Promise<boolean>
   }
 }
 
+async function tableColumnExists(connection: any, tableName: string, columnName: string): Promise<boolean> {
+  try {
+    const [rows] = await connection.query(`SHOW COLUMNS FROM ${tableName} LIKE ?`, [columnName]);
+    return (rows as any[]).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 async function usersActiveColumnExists(connection: any): Promise<boolean> {
   try {
     const [rows] = await connection.query("SHOW COLUMNS FROM users LIKE 'active'");
@@ -1125,7 +1134,19 @@ export const handleGetUsersMySQL: RequestHandler = async (req, res) => {
     const hasUserActiveColumn = await ensureUsersActiveColumn(connection);
 
     const hasAssignmentTable = await tableExists(connection, "rider_branch_assignments");
-    const assignmentJoin = hasAssignmentTable
+    const hasAssignmentRiderIdColumn = hasAssignmentTable
+      ? await tableColumnExists(connection, "rider_branch_assignments", "rider_id")
+      : false;
+    const hasAssignmentActiveColumn = hasAssignmentTable
+      ? await tableColumnExists(connection, "rider_branch_assignments", "active")
+      : false;
+    const hasAssignmentBranchColumn = hasAssignmentTable
+      ? await tableColumnExists(connection, "rider_branch_assignments", "branch_id")
+      : false;
+    const canUseAssignmentJoin =
+      hasAssignmentTable && hasAssignmentRiderIdColumn && hasAssignmentActiveColumn && hasAssignmentBranchColumn;
+
+    const assignmentJoin = canUseAssignmentJoin
       ? `LEFT JOIN (
            SELECT rider_id,
                   MAX(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as has_active,
@@ -1134,12 +1155,12 @@ export const handleGetUsersMySQL: RequestHandler = async (req, res) => {
            GROUP BY rider_id
          ) rba ON rba.rider_id = u.id`
       : "";
-    const branchExpr = hasAssignmentTable
+    const branchExpr = canUseAssignmentJoin
       ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.active_branch_id, u.branch_id) ELSE u.branch_id END"
       : "u.branch_id";
     const activeExpr = hasUserActiveColumn
       ? "u.active"
-      : hasAssignmentTable
+      : canUseAssignmentJoin
         ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.has_active, TRUE) ELSE TRUE END"
         : "TRUE";
 
@@ -1351,7 +1372,19 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
     }
 
     const hasAssignmentTable = await tableExists(connection, "rider_branch_assignments");
-    const assignmentJoin = hasAssignmentTable
+    const hasAssignmentRiderIdColumn = hasAssignmentTable
+      ? await tableColumnExists(connection, "rider_branch_assignments", "rider_id")
+      : false;
+    const hasAssignmentActiveColumn = hasAssignmentTable
+      ? await tableColumnExists(connection, "rider_branch_assignments", "active")
+      : false;
+    const hasAssignmentBranchColumn = hasAssignmentTable
+      ? await tableColumnExists(connection, "rider_branch_assignments", "branch_id")
+      : false;
+    const canUseAssignmentJoin =
+      hasAssignmentTable && hasAssignmentRiderIdColumn && hasAssignmentActiveColumn && hasAssignmentBranchColumn;
+
+    const assignmentJoin = canUseAssignmentJoin
       ? `LEFT JOIN (
            SELECT rider_id,
                   MAX(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as has_active,
@@ -1362,10 +1395,10 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
       : "";
     const selectActiveExpr = hasUserActiveColumn
       ? "u.active"
-      : hasAssignmentTable
+      : canUseAssignmentJoin
         ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.has_active, TRUE) ELSE TRUE END"
         : "TRUE";
-    const selectBranchExpr = hasAssignmentTable
+    const selectBranchExpr = canUseAssignmentJoin
       ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.active_branch_id, u.branch_id) ELSE u.branch_id END"
       : "u.branch_id";
 
