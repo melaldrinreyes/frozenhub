@@ -160,7 +160,7 @@ async function verifyCurrentUserPassword(
   const actor = (actorRows as any[])[0];
 
   if (!actor || !actor.password_hash) {
-    return { valid: false, status: 401, body: { error: "Account not found", requiresPassword: true } };
+    return { valid: false, status: 403, body: { error: "Account not found", requiresPassword: true } };
   }
 
   const passwordHash = String(actor.password_hash);
@@ -177,7 +177,7 @@ async function verifyCurrentUserPassword(
 
   const isPasswordValid = await bcrypt.compare(String(password), passwordHash);
   if (!isPasswordValid) {
-    return { valid: false, status: 401, body: { error: "Incorrect password", requiresPassword: true } };
+    return { valid: false, status: 403, body: { error: "Incorrect password", requiresPassword: true } };
   }
 
   return { valid: true };
@@ -735,7 +735,7 @@ export const handleStockTransferMySQL: RequestHandler = async (req, res) => {
       const actor = (actorRows as any[])[0];
 
       if (!actor || !actor.password_hash) {
-        res.status(401).json({ error: "Account not found", requiresPassword: true });
+        res.status(403).json({ error: "Account not found", requiresPassword: true });
         return;
       }
 
@@ -750,7 +750,7 @@ export const handleStockTransferMySQL: RequestHandler = async (req, res) => {
 
       const isPasswordValid = await bcrypt.compare(String(password), passwordHash);
       if (!isPasswordValid) {
-        res.status(401).json({ error: "Incorrect password", requiresPassword: true });
+        res.status(403).json({ error: "Incorrect password", requiresPassword: true });
         return;
       }
     }
@@ -1470,7 +1470,7 @@ export const handleChangePasswordMySQL: RequestHandler = async (req, res) => {
 
     const isMatch = await bcrypt.compare(String(currentPassword), String(user.password_hash));
     if (!isMatch) {
-      res.status(401).json({ error: "Current password is incorrect" });
+      res.status(403).json({ error: "Current password is incorrect", requiresPassword: true });
       return;
     }
 
