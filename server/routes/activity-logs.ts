@@ -93,6 +93,19 @@ function applyBranchScopeFilter(
   }
 }
 
+function applyInventoryAdjustVisibilityFilter(
+  req: any,
+  clauses: string[],
+  params: any[],
+  actionColumn: string
+) {
+  // Keep inventory adjustments visible only in branch audit logs.
+  if (req.user?.role === "admin") {
+    clauses.push(`${actionColumn} <> ?`);
+    params.push("UPDATE_INVENTORY");
+  }
+}
+
 export const handleGetActivityLogs: RequestHandler = async (req, res) => {
   const connection = await getConnection();
   try {
@@ -117,6 +130,7 @@ export const handleGetActivityLogs: RequestHandler = async (req, res) => {
     const clauses: string[] = ["1=1"];
     const params: any[] = [];
     applyBranchScopeFilter(req, resolvedBranchId, clauses, params, "al.branch_id");
+    applyInventoryAdjustVisibilityFilter(req, clauses, params, "al.action");
 
     if (userId) {
       clauses.push("al.user_id = ?");
@@ -200,6 +214,7 @@ export const handleGetActivityStats: RequestHandler = async (req, res) => {
     const clauses: string[] = ["1=1"];
     const params: any[] = [];
     applyBranchScopeFilter(req, resolvedBranchId, clauses, params, "branch_id");
+    applyInventoryAdjustVisibilityFilter(req, clauses, params, "action");
 
     if (startDate) {
       clauses.push("created_at >= ?");
@@ -260,6 +275,7 @@ export const handleGetRecentActivity: RequestHandler = async (req, res) => {
     const clauses: string[] = ["1=1"];
     const params: any[] = [];
     applyBranchScopeFilter(req, resolvedBranchId, clauses, params, "al.branch_id");
+    applyInventoryAdjustVisibilityFilter(req, clauses, params, "al.action");
 
     const [rows] = await connection.query(
       `SELECT al.*, b.name AS branch_name
