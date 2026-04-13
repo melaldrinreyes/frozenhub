@@ -7,6 +7,7 @@ import {
   ShoppingBag,
   Package,
   ShoppingCart,
+  User,
   LogIn,
   LogOut,
   Snowflake,
@@ -194,6 +195,22 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
                   </Badge>
                 )}
               </button>
+              <button
+                onClick={() => {
+                  if (!user) {
+                    setShowLoginModal(true);
+                    return;
+                  }
+                  navigate("/customer/profile");
+                }}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
+                  isActive("/customer/profile")
+                    ? "bg-gold-500/15 text-gold-300 shadow-sm"
+                    : "text-gray-300 hover:bg-white/5 hover:text-gold-300"
+                }`}
+              >
+                Profile
+              </button>
             </nav>
 
             {/* User Menu */}
@@ -224,7 +241,7 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
 
       {/* Bottom Navigation - Mobile Only */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 px-3 pb-3">
-        <div className="grid grid-cols-4 h-16 rounded-2xl border border-gold-500/20 bg-black/92 backdrop-blur-xl shadow-[0_-12px_30px_rgba(0,0,0,0.35)] overflow-hidden">
+        <div className="grid grid-cols-5 h-16 rounded-2xl border border-gold-500/20 bg-black/92 backdrop-blur-xl shadow-[0_-12px_30px_rgba(0,0,0,0.35)] overflow-hidden">
 
           <button
             onClick={() => navigate("/customer/shop")}
@@ -286,6 +303,24 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
               )}
             </div>
             <span className="text-xs font-medium">Cart</span>
+          </button>
+
+          <button
+            onClick={() => {
+              if (!user) {
+                setShowLoginModal(true);
+                return;
+              }
+              navigate("/customer/profile");
+            }}
+            className={`flex flex-col items-center justify-center gap-1 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-400/70 ${
+              isActive("/customer/profile")
+                ? "text-gold-300 bg-gold-500/15"
+                : "text-gray-400 hover:text-gold-300 hover:bg-white/5"
+            }`}
+          >
+            <User className="w-5 h-5" />
+            <span className="text-xs font-medium">Profile</span>
           </button>
 
           {user ? (

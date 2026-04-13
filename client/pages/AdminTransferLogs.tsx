@@ -113,6 +113,11 @@ export default function AdminTransferLogs() {
   const logs = logsData?.logs || [];
   const branches = branchesData?.branches || [];
 
+  const isSuccessfulTransfer = (status: string | undefined | null) => {
+    const normalizedStatus = String(status || "").toLowerCase();
+    return normalizedStatus === "success" || normalizedStatus === "completed";
+  };
+
   // Check for new transfers (less than 5 minutes old)
   const newTransfers = logs.filter((log: any) => {
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
@@ -402,52 +407,54 @@ export default function AdminTransferLogs() {
                   {logs.map((log: any) => (
                     <div
                       key={log.id}
-                      className="bg-gradient-to-br from-white to-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow"
+                      className="bg-gradient-to-br from-white to-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm transition-shadow"
                     >
                       {/* Header with Product and Date */}
-                      <div className="flex items-start justify-between mb-3 pb-3 border-b border-slate-100">
-                        <div className="flex items-start gap-3 flex-1">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white flex-shrink-0">
-                            <Package className="w-5 h-5" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-bold text-slate-900 text-sm mb-1">
-                              {log.product_name}
-                            </h3>
-                            <p className="text-xs text-slate-500 mb-1">ID: {log.product_id}</p>
-                            <div className="flex items-center gap-1.5 text-slate-600">
-                              <Calendar className="w-3 h-3 flex-shrink-0" />
-                              <p className="text-xs">
-                                {parseDate(log.transferred_at || log.transfer_date).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric'
-                                })} • {parseDate(log.transferred_at || log.transfer_date).toLocaleTimeString('en-US', {
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </p>
+                      <div className="flex flex-col gap-3 mb-3 pb-3 border-b border-slate-100">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3 flex-1 min-w-0">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white flex-shrink-0">
+                              <Package className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-bold text-slate-900 text-sm mb-1 truncate">
+                                {log.product_name}
+                              </h3>
+                              <p className="text-xs text-slate-500 mb-1">ID: {log.product_id}</p>
+                              <div className="flex items-center gap-1.5 text-slate-600">
+                                <Calendar className="w-3 h-3 flex-shrink-0" />
+                                <p className="text-xs leading-5">
+                                  {parseDate(log.transferred_at || log.transfer_date).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })} • {parseDate(log.transferred_at || log.transfer_date).toLocaleTimeString('en-US', {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="ml-2">
-                          {log.status === "success" ? (
-                            <Badge className="bg-green-500 hover:bg-green-600 text-xs whitespace-nowrap">
-                              <CheckCircle className="mr-1 h-3 w-3" />
-                              Success
-                            </Badge>
-                          ) : (
-                            <Badge variant="destructive" className="text-xs whitespace-nowrap">
-                              <XCircle className="mr-1 h-3 w-3" />
-                              Failed
-                            </Badge>
-                          )}
+                          <div className="shrink-0">
+                            {isSuccessfulTransfer(log.status) ? (
+                              <Badge className="bg-green-500 hover:bg-green-600 text-[11px] whitespace-nowrap px-2 py-1">
+                                <CheckCircle className="mr-1 h-3 w-3" />
+                                Success
+                              </Badge>
+                            ) : (
+                              <Badge variant="destructive" className="text-[11px] whitespace-nowrap px-2 py-1">
+                                <XCircle className="mr-1 h-3 w-3" />
+                                Failed
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
                       
                       {/* Quantity Display */}
                       <div className="mb-3 bg-white rounded-lg p-3 border border-slate-100">
-                        <div className="flex items-center justify-center gap-2">
+                        <div className="flex items-center justify-center gap-2 text-center">
                           {log.quantity > 100 && <Lock className="h-4 w-4 text-amber-500" />}
                           <span className={`text-2xl font-bold ${log.quantity > 100 ? 'text-amber-600' : 'text-slate-900'}`}>
                             {log.quantity}
@@ -461,23 +468,25 @@ export default function AdminTransferLogs() {
 
                       {/* Transfer Route */}
                       <div className="mb-3 bg-white rounded-lg p-3 border border-slate-100">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex-1">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <TrendingDown className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
                               <p className="text-xs font-medium text-slate-500">From</p>
                             </div>
-                            <p className="text-sm font-semibold text-slate-900 truncate">
+                            <p className="text-sm font-semibold text-slate-900 break-words">
                               {log.from_branch_name}
                             </p>
                           </div>
-                          <ArrowRightLeft className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                          <div className="flex-1 text-right">
-                            <div className="flex items-center justify-end gap-2 mb-1">
+                          <div className="flex items-center justify-center">
+                            <ArrowRightLeft className="w-4 h-4 rotate-90 text-slate-400 sm:rotate-0 flex-shrink-0" />
+                          </div>
+                          <div className="flex-1 min-w-0 text-left sm:text-right">
+                            <div className="flex items-center gap-2 mb-1 sm:justify-end">
                               <p className="text-xs font-medium text-slate-500">To</p>
                               <TrendingUp className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
                             </div>
-                            <p className="text-sm font-semibold text-slate-900 truncate">
+                            <p className="text-sm font-semibold text-slate-900 break-words sm:text-right">
                               {log.to_branch_name}
                             </p>
                           </div>
@@ -485,7 +494,7 @@ export default function AdminTransferLogs() {
                       </div>
 
                       {/* Additional Details */}
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="bg-white rounded-lg p-3 border border-slate-100">
                           <div className="flex items-center gap-2 mb-1">
                             <User className="w-3.5 h-3.5 text-slate-600" />
@@ -496,7 +505,7 @@ export default function AdminTransferLogs() {
                           </p>
                         </div>
                         {log.reason && (
-                          <div className="bg-white rounded-lg p-3 border border-slate-100 col-span-2">
+                          <div className="bg-white rounded-lg p-3 border border-slate-100">
                             <p className="text-xs font-medium text-slate-500 mb-1">Reason</p>
                             <p className="text-sm text-slate-900">
                               {log.reason}
@@ -504,7 +513,7 @@ export default function AdminTransferLogs() {
                           </div>
                         )}
                         {log.notes && (
-                          <div className="bg-amber-50 rounded-lg p-3 border border-amber-200 col-span-2">
+                          <div className="bg-amber-50 rounded-lg p-3 border border-amber-200">
                             <p className="text-xs font-medium text-amber-700 mb-1">Notes</p>
                             <p className="text-sm text-amber-900">
                               {log.notes}
@@ -588,7 +597,7 @@ export default function AdminTransferLogs() {
                               )}
                             </TableCell>
                             <TableCell className="text-center px-2 sm:px-4">
-                              {log.status === "success" ? (
+                              {isSuccessfulTransfer(log.status) ? (
                                 <Badge className="bg-green-500 hover:bg-green-600 text-xs whitespace-nowrap">
                                   <CheckCircle className="mr-1 h-3 w-3" />
                                   Success

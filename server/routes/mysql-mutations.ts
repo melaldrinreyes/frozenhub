@@ -592,17 +592,68 @@ export const handleDeleteInventoryMySQL: RequestHandler = async (req, res) => {
 };
 
 export const handleStockTransferMySQL: RequestHandler = async (req, res) => {
-  const { productId, fromBranchId, toBranchId, quantity, reason, notes } = req.body || {};
+  const body = req.body || {};
+  const productId = body.productId || body.product_id;
+  const fromBranchId = body.fromBranchId || body.from_branch_id;
+  const toBranchId = body.toBranchId || body.to_branch_id;
+  const quantity = body.quantity;
+  const password = body.password;
+  const reason = body.reason;
+  const notes = body.notes;
   const transferQty = Math.max(1, Math.floor(toNumber(quantity, 0)));
 
   if (!productId || !fromBranchId || !toBranchId || fromBranchId === toBranchId) {
-    res.status(400).json({ error: "Valid productId, fromBranchId, and toBranchId are required" });
+    res.status(400).json({ error: "Valid productId/product_id, fromBranchId/from_branch_id, and toBranchId/to_branch_id are required" });
     return;
   }
 
   let connection;
   try {
     connection = await getConnection();
+
+    // Require password verification server-side for large transfers.
+    if (transferQty > 100) {
+      const actorUserId = req.user?.id || req.session?.userId;
+      if (!actorUserId) {
+        res.status(401).json({ error: "Authentication required", requiresPassword: true });
+        return;
+      }
+
+      if (!password || String(password).trim().length === 0) {
+        res.status(403).json({
+          error: "Password verification required for transfers above 100 units",
+          requiresPassword: true,
+        });
+        return;
+      }
+
+      const [actorRows] = await connection.query(
+        "SELECT password_hash FROM users WHERE id = ? LIMIT 1",
+        [actorUserId]
+      );
+      const actor = (actorRows as any[])[0];
+
+      if (!actor || !actor.password_hash) {
+        res.status(401).json({ error: "Account not found", requiresPassword: true });
+        return;
+      }
+
+      const passwordHash = String(actor.password_hash);
+      if (passwordHash.startsWith("oauth-google-")) {
+        res.status(400).json({
+          error: "Password verification is not available for Google-linked accounts",
+          requiresPassword: true,
+        });
+        return;
+      }
+
+      const isPasswordValid = await bcrypt.compare(String(password), passwordHash);
+      if (!isPasswordValid) {
+        res.status(401).json({ error: "Incorrect password", requiresPassword: true });
+        return;
+      }
+    }
+
     await connection.beginTransaction();
 
     const [productRows] = await connection.query("SELECT id, name FROM products WHERE id = ? LIMIT 1", [productId]);
@@ -696,7 +747,24 @@ export const handleStockTransferMySQL: RequestHandler = async (req, res) => {
     });
 
     await connection.commit();
-    res.json({ message: "Stock transfer completed", transferId: logId });
+    res.json({
+      message: "Stock transfer completed",
+      transferId: logId,
+      transfer: {
+        id: logId,
+        product_id: productId,
+        product_name: product.name,
+        from_branch_id: fromBranchId,
+        from_branch: fromBranch.name,
+        to_branch_id: toBranchId,
+        to_branch: toBranch.name,
+        quantity: transferQty,
+        remaining_stock: Number(fromInv.quantity || 0) - transferQty,
+        new_stock: toInv ? Number(toInv.quantity || 0) + transferQty : transferQty,
+        was_large_transfer: transferQty > 100,
+        reason: reason || null,
+      },
+    });
   } catch (error: any) {
     if (connection) {
       try {
@@ -1302,6 +1370,13 @@ export const handleChangePasswordMySQL: RequestHandler = async (req, res) => {
       return;
     }
 
+    if (String(user.password_hash || "").startsWith("oauth-google-")) {
+      res.status(400).json({
+        error: "This account uses Google sign-in. Password change is not available.",
+      });
+      return;
+    }
+
     const isMatch = await bcrypt.compare(String(currentPassword), String(user.password_hash));
     if (!isMatch) {
       res.status(401).json({ error: "Current password is incorrect" });
@@ -1327,6 +1402,123 @@ export const handleChangePasswordMySQL: RequestHandler = async (req, res) => {
   } catch (error) {
     console.error("MySQL change password error:", error);
     res.status(500).json({ error: "Failed to change password" });
+  } finally {
+    connection?.release();
+  }
+};
+
+export const handleGetCustomerProfileMySQL: RequestHandler = async (req, res) => {
+  const userId = req.user?.id || req.session?.userId;
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  let connection;
+  try {
+    connection = await getConnection();
+    const [rows] = await connection.query(
+      `SELECT id, name, email, phone, role, branch_id, created_at, google_id, password_hash
+       FROM users
+       WHERE id = ?
+       LIMIT 1`,
+      [userId]
+    );
+
+    const user = (rows as any[])[0];
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const passwordHash = String(user.password_hash || "");
+    res.json({
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        branch_id: user.branch_id,
+        created_at: user.created_at,
+      },
+      authMethods: {
+        googleLinked: Boolean(user.google_id),
+        passwordEnabled: passwordHash.length > 0 && !passwordHash.startsWith("oauth-google-"),
+      },
+    });
+  } catch (error: any) {
+    console.error("MySQL get customer profile error:", error);
+    res.status(500).json({ error: "Failed to load profile" });
+  } finally {
+    connection?.release();
+  }
+};
+
+export const handleUpdateCustomerProfileMySQL: RequestHandler = async (req, res) => {
+  const userId = req.user?.id || req.session?.userId;
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const name = String(req.body?.name || "").trim();
+  const phone = String(req.body?.phone || "").trim();
+
+  if (!name || !phone) {
+    res.status(400).json({ error: "Name and phone are required" });
+    return;
+  }
+
+  let connection;
+  try {
+    connection = await getConnection();
+    await connection.query("UPDATE users SET name = ?, phone = ? WHERE id = ?", [name, phone, userId]);
+
+    const [rows] = await connection.query(
+      `SELECT id, name, email, phone, role, branch_id, created_at
+       FROM users
+       WHERE id = ?
+       LIMIT 1`,
+      [userId]
+    );
+
+    const user = (rows as any[])[0];
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    if (req.session) {
+      req.session.user = {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        branch_id: user.branch_id,
+        created_at: user.created_at,
+      };
+    }
+
+    await logActivity(connection, {
+      userId,
+      userName: user.name,
+      userRole: user.role,
+      action: "UPDATE_CUSTOMER_PROFILE",
+      entityType: "user",
+      entityId: userId,
+      entityName: user.name,
+      description: "Customer profile updated",
+      metadata: { updatedFields: ["name", "phone"] },
+      ipAddress: req.ip || null,
+      branchId: user.branch_id || null,
+    });
+
+    res.json({ user, message: "Profile updated successfully" });
+  } catch (error: any) {
+    console.error("MySQL update customer profile error:", error);
+    res.status(500).json({ error: "Failed to update profile" });
   } finally {
     connection?.release();
   }

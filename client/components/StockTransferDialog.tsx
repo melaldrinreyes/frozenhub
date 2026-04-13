@@ -93,16 +93,22 @@ export function StockTransferDialog({
     }) => apiClient.transferStock(data),
     onSuccess: (data) => {
       const transfer = data.transfer;
+      const transferQuantity = transfer?.quantity ?? pendingTransfer?.quantity ?? 0;
+      const transferProductName = transfer?.product_name ?? pendingTransfer?.productName ?? "Selected product";
+      const fromBranchName = transfer?.from_branch ?? pendingTransfer?.fromBranchName ?? "Source branch";
+      const toBranchName = transfer?.to_branch ?? pendingTransfer?.toBranchName ?? "Destination branch";
+      const fromRemainingStock = transfer?.remaining_stock ?? pendingTransfer?.remainingStock ?? 0;
+      const toNewStock = transfer?.new_stock ?? transferQuantity;
       toast({
         title: "✅ Stock Transferred Successfully",
         description: (
           <div className="mt-2 space-y-1 text-sm">
-            <p><strong>{transfer.quantity}</strong> units of <strong>{transfer.product_name}</strong></p>
+            <p><strong>{transferQuantity}</strong> units of <strong>{transferProductName}</strong></p>
             <p className="text-xs text-muted-foreground">
-              From: {transfer.from_branch} (Now: {transfer.from_remaining_stock} units)<br/>
-              To: {transfer.to_branch} (Now: {transfer.to_new_stock} units)
+              From: {fromBranchName} (Now: {fromRemainingStock} units)<br/>
+              To: {toBranchName} (Now: {toNewStock} units)
             </p>
-            {transfer.was_large_transfer && (
+            {Boolean(transfer?.was_large_transfer ?? pendingTransfer?.isLargeTransfer) && (
               <p className="text-xs text-amber-600">🔒 Large transfer verified</p>
             )}
           </div>
@@ -114,15 +120,15 @@ export function StockTransferDialog({
       resetForm();
     },
     onError: (error: any) => {
-      // Check if password is required
-      if (error.response?.data?.requiresPassword) {
+      // Check if password verification is required
+      if (error?.data?.requiresPassword || String(error?.message || "").toLowerCase().includes("password")) {
         setShowPasswordDialog(true);
         return;
       }
       
       toast({
         title: "Transfer Failed",
-        description: error.response?.data?.error || error.message,
+        description: error?.data?.error || error?.message || "Transfer failed",
         variant: "destructive",
       });
     },
@@ -256,7 +262,7 @@ export function StockTransferDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-[500px] max-h-[90vh] overflow-y-auto sm:w-full">
           <DialogHeader>
             <DialogTitle>Transfer Stock Between Branches</DialogTitle>
             <DialogDescription>
@@ -386,7 +392,7 @@ export function StockTransferDialog({
 
       {/* Confirmation Dialog */}
       <AlertDialog open={showConfirmation} onOpenChange={setShowConfirmation}>
-        <AlertDialogContent className="max-w-2xl">
+          <AlertDialogContent className="w-[calc(100vw-1rem)] max-w-2xl max-h-[90vh] overflow-y-auto sm:w-full">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
@@ -408,7 +414,7 @@ export function StockTransferDialog({
                   <>
                     {/* Transfer Overview Card */}
                     <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Product</p>
                           <p className="font-semibold text-foreground">{pendingTransfer.productName}</p>
@@ -421,7 +427,7 @@ export function StockTransferDialog({
                     </div>
 
                     {/* From/To Branches */}
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       {/* From Branch */}
                       <div className="bg-red-50 dark:bg-red-950/20 p-4 rounded-lg border border-red-200 dark:border-red-800">
                         <div className="flex items-center gap-2 mb-2">
@@ -509,7 +515,7 @@ export function StockTransferDialog({
 
       {/* Password Verification Dialog for Large Transfers */}
       <AlertDialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="w-[calc(100vw-1rem)] max-w-lg max-h-[90vh] overflow-y-auto sm:w-full">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Lock className="h-5 w-5 text-amber-500" />

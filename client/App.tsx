@@ -30,9 +30,11 @@ import BranchSales from "./pages/BranchSales";
 import BranchOnlineOrders from "./pages/BranchOnlineOrders";
 import BranchSettings from "./pages/BranchSettings";
 import BranchUsers from "./pages/BranchUsers";
+import POSPage from "./pages/POSPage";
 import CustomerShop from "./pages/CustomerShop";
 import CustomerCart from "./pages/CustomerCart";
 import CustomerOrders from "./pages/CustomerOrders";
+import CustomerProfile from "./pages/CustomerProfile";
 import RiderProfile from "./pages/RiderProfile";
 import AdminManageBranches from "./pages/AdminManageBranches";
 
@@ -209,6 +211,14 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/pos"
+              element={
+                <ProtectedRoute allowedRoles={["admin", "branch_admin", "pos_operator"]}>
+                  <POSPage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Customer Routes */}
             <Route
@@ -228,6 +238,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={["customer"]}>
                   <CustomerOrders />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/customer/profile"
+              element={
+                <ProtectedRoute allowedRoles={["customer"]}>
+                  <CustomerProfile />
                 </ProtectedRoute>
               }
             />

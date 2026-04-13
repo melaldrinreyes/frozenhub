@@ -1,77 +1,165 @@
 import { RequestHandler } from "express";
+import { createClient } from "@supabase/supabase-js";
 import { getConnection } from "../db";
 import { generateToken } from "../middleware/jwt";
 import { AuthUser } from "../../shared/api";
 
 interface SupabaseCallbackRequest {
   accessToken: string;
-  email: string;
-  googleId: string;
+}
+
+function isMissingGoogleIdColumnError(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return (
+    message.includes("column \"google_id\" does not exist") ||
+    message.includes("unknown column 'google_id'")
+  );
+}
+
+async function ensureGoogleIdColumn(connection: any) {
+  await connection.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT`);
+  await connection.query(`CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)`);
+}
+
+function makeUserId() {
+  return `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export const handleSupabaseCallback: RequestHandler = async (req, res) => {
+  let connection: any;
   try {
-    const { accessToken, email, googleId } =
-      req.body as SupabaseCallbackRequest;
+    const { accessToken } = req.body as SupabaseCallbackRequest;
 
-    if (!accessToken || !email || !googleId) {
+    if (!accessToken) {
       return res.status(400).json({
-        message: "Missing required fields: accessToken, email, googleId",
+        message: "Missing required field: accessToken",
       });
     }
 
-    const connection = await getConnection();
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return res.status(500).json({
+        message: "Supabase auth is not configured on the server",
+      });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const {
+      data: { user: supabaseUser },
+      error: userError,
+    } = await supabase.auth.getUser(accessToken);
+
+    if (userError || !supabaseUser?.email) {
+      return res.status(401).json({
+        message: "Invalid Supabase session",
+      });
+    }
+
+    const email = supabaseUser.email;
+    const googleId = supabaseUser.id;
+    const displayName =
+      String(
+        (supabaseUser.user_metadata as Record<string, unknown> | undefined)?.full_name ||
+        (supabaseUser.user_metadata as Record<string, unknown> | undefined)?.name ||
+        email.split("@")[0]
+      ) || email.split("@")[0];
+
+    connection = await getConnection();
+    await ensureGoogleIdColumn(connection);
 
     // Check if user exists by email or google_id
-    let user = await connection.query(
-      "SELECT * FROM users WHERE email = ? OR google_id = ?",
-      [email, googleId]
-    );
-
-    if (user.length === 0) {
-      // Create new customer user
-      const newUser = await connection.query(
-        "INSERT INTO users (email, name, google_id, role, created_at) VALUES (?, ?, ?, ?, NOW())",
-        [email, email.split("@")[0], googleId, "customer"]
+    let userRow: any | null = null;
+    try {
+      const [rows] = await connection.query(
+        "SELECT id, name, email, phone, role, branch_id, created_at, google_id FROM users WHERE email = ? OR google_id = ? LIMIT 1",
+        [email, googleId]
       );
+      userRow = (rows as any[])[0] || null;
+    } catch (error) {
+      if (!isMissingGoogleIdColumnError(error)) throw error;
+      await ensureGoogleIdColumn(connection);
+      const [rows] = await connection.query(
+        "SELECT id, name, email, phone, role, branch_id, created_at, google_id FROM users WHERE email = ? OR google_id = ? LIMIT 1",
+        [email, googleId]
+      );
+      userRow = (rows as any[])[0] || null;
+    }
 
-      const userId = newUser.insertId;
+    if (!userRow) {
+      // Create new customer user
+      const newUserId = makeUserId();
+      await connection.query(
+        "INSERT INTO users (id, name, email, phone, password_hash, google_id, role, branch_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
+        [
+          newUserId,
+          displayName,
+          email,
+          "",
+          `oauth-google-${googleId}`,
+          googleId,
+          "customer",
+          null,
+        ]
+      );
 
       // Fetch the created user
-      const createdUser = await connection.query(
-        "SELECT id, name, email, phone, role, branch_id, created_at FROM users WHERE id = ?",
-        [userId]
+      const [createdRows] = await connection.query(
+        "SELECT id, name, email, phone, role, branch_id, created_at, google_id FROM users WHERE id = ? LIMIT 1",
+        [newUserId]
       );
+      const createdUser = (createdRows as any[])[0] || null;
 
-      if (createdUser.length === 0) {
+      if (!createdUser) {
         return res
           .status(500)
           .json({ message: "Failed to create user account" });
       }
 
-      user = createdUser;
-    } else if (user[0].role !== "customer") {
+      userRow = createdUser;
+    } else if (userRow.role !== "customer") {
       // Only customers can sign in with Google
       return res.status(403).json({
         message: "Google sign-in is only available for customer accounts",
       });
-    } else if (!user[0].google_id) {
+    } else if (!userRow.google_id) {
       // Link Google ID to existing customer account
       await connection.query("UPDATE users SET google_id = ? WHERE id = ?", [
         googleId,
-        user[0].id,
+        userRow.id,
       ]);
+      userRow.google_id = googleId;
     }
 
     const authUser: AuthUser = {
-      id: user[0].id,
-      name: user[0].name || "",
-      email: user[0].email,
-      phone: user[0].phone || "",
-      role: user[0].role,
-      branch_id: user[0].branch_id,
-      created_at: user[0].created_at,
+      id: userRow.id,
+      name: userRow.name || "",
+      email: userRow.email,
+      phone: userRow.phone || "",
+      role: userRow.role,
+      branch_id: userRow.branch_id,
+      created_at: userRow.created_at,
     };
+
+    req.session.userId = authUser.id;
+    req.session.userRole = authUser.role;
+    req.session.user = authUser;
+
+    // Persist session explicitly before responding to avoid race conditions
+    // right after OAuth callback redirects.
+    await new Promise<void>((resolve, reject) => {
+      if (!req.session?.save) {
+        resolve();
+        return;
+      }
+      req.session.save((sessionError) => {
+        if (sessionError) {
+          reject(sessionError);
+          return;
+        }
+        resolve();
+      });
+    });
 
     // Generate JWT token
     const token = generateToken(authUser);
@@ -86,6 +174,7 @@ export const handleSupabaseCallback: RequestHandler = async (req, res) => {
 
     return res.json({
       user: authUser,
+      token,
       message: "Successfully authenticated with Google",
     });
   } catch (error: any) {
@@ -93,5 +182,7 @@ export const handleSupabaseCallback: RequestHandler = async (req, res) => {
     return res.status(500).json({
       message: error.message || "Authentication failed",
     });
+  } finally {
+    connection?.release?.();
   }
 };

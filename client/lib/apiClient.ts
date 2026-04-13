@@ -130,6 +130,7 @@ class ApiClient {
 
         const error: any = new Error(errorMessage);
         error.status = response.status;
+        error.data = errorData;
         throw error;
       }
 
@@ -198,6 +199,19 @@ class ApiClient {
       }
       throw error;
     }
+  }
+
+  async exchangeSupabaseSession(accessToken: string) {
+    const response = await this.request<{ user: any; token?: string; message: string }>("/auth/supabase-callback", {
+      method: "POST",
+      body: JSON.stringify({ accessToken }),
+    });
+
+    if (response.token && typeof window !== "undefined") {
+      localStorage.setItem(JWT_TOKEN_KEY, response.token);
+    }
+
+    return response;
   }
 
   // System Stats
@@ -442,6 +456,23 @@ class ApiClient {
     return this.request<{ message: string }>("/change-password", {
       method: "POST",
       body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  }
+
+  async getCustomerProfile() {
+    return this.request<{
+      user: any;
+      authMethods: {
+        googleLinked: boolean;
+        passwordEnabled: boolean;
+      };
+    }>("/customer/profile");
+  }
+
+  async updateCustomerProfile(data: { name: string; phone: string }) {
+    return this.request<{ user: any; message: string }>("/customer/profile", {
+      method: "PUT",
+      body: JSON.stringify(data),
     });
   }
 

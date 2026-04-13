@@ -43,7 +43,10 @@ export const requireAuth: RequestHandler = (req, res, next) => {
 // Middleware to check if user has specific role
 export function requireRole(...allowedRoles: string[]): RequestHandler {
   return (req, res, next) => {
-    if (!req.user) {
+    const effectiveRole = req.user?.role || req.session?.user?.role || req.session?.userRole;
+    const effectiveEmail = req.user?.email || req.session?.user?.email || "unknown";
+
+    if (!effectiveRole) {
       console.warn(`Authentication missing for ${req.path} from ${req.ip}`);
       res.status(401).json({ 
         error: "Authentication required",
@@ -52,14 +55,19 @@ export function requireRole(...allowedRoles: string[]): RequestHandler {
       return;
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    // Ensure req.user is available to downstream handlers when session auth is present.
+    if (!req.user && req.session?.user) {
+      req.user = req.session.user;
+    }
+
+    if (!allowedRoles.includes(effectiveRole)) {
       console.warn(
-        `Access denied: User ${req.user.email} (${req.user.role}) attempted to access ${req.path} requiring roles: ${allowedRoles.join(", ")}`
+        `Access denied: User ${effectiveEmail} (${effectiveRole}) attempted to access ${req.path} requiring roles: ${allowedRoles.join(", ")}`
       );
       res.status(403).json({ 
         error: "Access denied", 
         message: `This action requires one of these roles: ${allowedRoles.join(", ")}`,
-        userRole: req.user.role,
+        userRole: effectiveRole,
         requiredRoles: allowedRoles
       });
       return;

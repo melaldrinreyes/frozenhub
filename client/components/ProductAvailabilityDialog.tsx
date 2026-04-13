@@ -51,7 +51,7 @@ export function ProductAvailabilityDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px]">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-[700px] max-h-[90vh] overflow-y-auto sm:w-full">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
@@ -79,7 +79,7 @@ export function ProductAvailabilityDialog({
           ) : data ? (
             <>
               {/* Summary Card */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg">
+              <div className="grid grid-cols-1 gap-4 rounded-lg bg-muted/50 p-4 sm:grid-cols-2 md:grid-cols-4">
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Product</p>
                   <p className="text-sm font-medium truncate">
@@ -105,7 +105,56 @@ export function ProductAvailabilityDialog({
               </div>
 
               {/* Branch-wise Inventory Table */}
-              <div className="border rounded-lg">
+              <div className="md:hidden space-y-3">
+                {data.inventory && data.inventory.length > 0 ? (
+                  data.inventory.map((item: any) => {
+                    const status = getStockStatus(item.quantity, item.reorder_level);
+                    const StatusIcon = status.icon;
+
+                    return (
+                      <div key={item.id} className="rounded-xl border bg-background p-4 shadow-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-2">
+                            <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                            <div>
+                              <p className="font-medium leading-tight">{item.branch_name}</p>
+                              {item.branch_location && (
+                                <p className="mt-1 text-xs text-muted-foreground">{item.branch_location}</p>
+                              )}
+                            </div>
+                          </div>
+
+                          <Badge variant={status.variant} className="flex items-center gap-1 whitespace-nowrap">
+                            <StatusIcon className="h-3 w-3" />
+                            {status.label}
+                          </Badge>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                          <div className="rounded-lg bg-muted/50 p-3">
+                            <p className="text-xs text-muted-foreground">Quantity</p>
+                            <p className="mt-1 font-semibold">{item.quantity}</p>
+                          </div>
+                          <div className="rounded-lg bg-muted/50 p-3">
+                            <p className="text-xs text-muted-foreground">Reorder Level</p>
+                            <p className="mt-1 font-semibold">{item.reorder_level}</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 text-xs text-muted-foreground">
+                          Last updated: {item.last_stock_check ? new Date(item.last_stock_check).toLocaleDateString() : "N/A"}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="rounded-lg border py-8 text-center text-muted-foreground">
+                    No inventory data available
+                  </div>
+                )}
+              </div>
+
+              <div className="hidden md:block border rounded-lg overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow>

@@ -187,6 +187,8 @@ import {
   handleAssignRiderBranchMySQL,
   handleDeleteUserMySQL,
   handleChangePasswordMySQL,
+  handleGetCustomerProfileMySQL,
+  handleUpdateCustomerProfileMySQL,
   handleGetSaleItemsMySQL,
   handleUpdateOrderStatusMySQL,
   handleAssignRiderMySQL,
@@ -477,6 +479,8 @@ export function createServer() {
   app.patch("/api/riders/:id/branch", requireAuth, requireRole("admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleAssignRiderBranchMySQL : handleUpdateUser);
   app.delete("/api/users/:id", requireAuth, requireRole("admin", "branch_admin"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleDeleteUserMySQL : handleDeleteUser);
   app.post("/api/change-password", requireAuth, strictRateLimiter, runtimeDataProvider === "supabase" ? handleChangePasswordMySQL : handleChangePassword);
+  app.get("/api/customer/profile", requireAuth, requireRole("customer"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetCustomerProfileMySQL : handleGetMe);
+  app.put("/api/customer/profile", requireAuth, requireRole("customer"), strictRateLimiter, runtimeDataProvider === "supabase" ? handleUpdateCustomerProfileMySQL : handleGetMe);
 
   // Sales routes
   app.get("/api/sales", requireAuth, requireRole("admin", "branch_admin", "pos_operator", "rider"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetSalesMySQL : handleGetSales);

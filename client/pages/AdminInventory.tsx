@@ -296,16 +296,16 @@ export default function AdminInventory() {
     <AdminLayout userRole="admin">
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="max-w-[12ch] text-2xl font-bold leading-tight text-slate-900 sm:max-w-none sm:text-3xl">
               Inventory Management
             </h1>
-            <p className="text-slate-600 mt-2">
+            <p className="mt-2 max-w-md text-sm leading-6 text-slate-600 sm:text-base">
               Monitor stock levels across all branches
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-row">
             <Button 
               onClick={() => {
                 if (confirm("This will remove duplicate inventory entries. Continue?")) {
@@ -313,13 +313,13 @@ export default function AdminInventory() {
                 }
               }}
               variant="outline"
-              className="gap-2"
+              className="w-full gap-2 sm:w-auto"
               disabled={cleanupDuplicatesMutation.isPending}
             >
               <Trash2 className="h-4 w-4" />
               {cleanupDuplicatesMutation.isPending ? "Cleaning..." : "Remove Duplicates"}
             </Button>
-            <Button onClick={() => handleOpenDialog()} className="gap-2">
+            <Button onClick={() => handleOpenDialog()} className="w-full gap-2 sm:w-auto">
               <Plus className="h-4 w-4" />
               Add Inventory
             </Button>
@@ -374,7 +374,7 @@ export default function AdminInventory() {
 
         {/* Alerts */}
         {lowStockCount > 0 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex gap-3">
+          <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:flex-row">
             <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div>
               <h3 className="font-semibold text-amber-900">
@@ -390,7 +390,7 @@ export default function AdminInventory() {
         {/* Filters */}
         <Card>
           <CardContent className="pt-6 space-y-4">
-            <div className="flex gap-4 flex-col sm:flex-row">
+            <div className="flex flex-col gap-4 sm:flex-row">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
                 <Input
@@ -412,7 +412,7 @@ export default function AdminInventory() {
                   setCurrentPage(1);
                 }}
               >
-                <SelectTrigger className="w-[200px]">
+                <SelectTrigger className="w-full sm:w-[200px]">
                   <SelectValue placeholder="All Branches" />
                 </SelectTrigger>
                 <SelectContent>
@@ -431,6 +431,7 @@ export default function AdminInventory() {
                   setCurrentPage(1);
                 }}
                 variant={filterLowStock ? "default" : "outline"}
+                className="w-full sm:w-auto"
               >
                 <AlertTriangle className="w-4 h-4 mr-2" />
                 Low Stock Only
@@ -439,6 +440,7 @@ export default function AdminInventory() {
               <Button
                 onClick={() => setShowTransferDialog(true)}
                 variant="outline"
+                className="w-full sm:w-auto"
               >
                 <ArrowRightLeft className="w-4 h-4 mr-2" />
                 Transfer Stock
@@ -512,7 +514,182 @@ export default function AdminInventory() {
             <CardTitle className="text-lg sm:text-xl">Inventory Levels ({filteredInventory.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <div className="md:hidden space-y-3">
+              {paginatedInventory.map((item) => {
+                const status = getStockStatus(item);
+                const percentage = (item.quantity / item.reorder_level) * 100;
+
+                return (
+                  <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {item.product_name}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-600">
+                          {item.branch_name}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold whitespace-nowrap ${
+                          status.color === "red"
+                            ? "bg-red-100 text-red-800"
+                            : status.color === "yellow"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-green-100 text-green-800"
+                        }`}
+                      >
+                        {status.label}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                      <div className="rounded-lg bg-slate-50 p-3">
+                        <p className="text-xs text-slate-500">Current Stock</p>
+                        <p className="mt-1 font-semibold text-slate-900">{item.quantity}</p>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 p-3">
+                        <p className="text-xs text-slate-500">Reorder Level</p>
+                        <p className="mt-1 font-semibold text-slate-900">{item.reorder_level}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                        <div
+                          className={`${getProgressWidthClass(percentage)} h-2 rounded-full ${
+                            percentage === 0
+                              ? "bg-red-500"
+                              : percentage <= 50
+                                ? "bg-red-500"
+                                : percentage <= 100
+                                  ? "bg-yellow-500"
+                                  : "bg-green-500"
+                          }`}
+                        />
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Last check: {formatDate(item.last_stock_check)}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedProductId(item.product_id);
+                          setSelectedProductName(item.product_name);
+                          setShowAvailabilityDialog(true);
+                        }}
+                        className="flex-1 gap-2"
+                        title="View availability across branches"
+                      >
+                        <Eye className="w-4 h-4" />
+                        View
+                      </Button>
+
+                      <Dialog
+                        open={isDialogOpen && editingId === item.id}
+                        onOpenChange={setIsDialogOpen}
+                      >
+                        <DialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenDialog(item)}
+                            className="flex-1 gap-2"
+                            title="Edit inventory"
+                          >
+                            <Edit className="w-4 h-4" />
+                            Edit
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto mx-4">
+                          <DialogHeader>
+                            <DialogTitle className="text-lg sm:text-xl">Update Inventory</DialogTitle>
+                          </DialogHeader>
+
+                          <div className="space-y-4">
+                            <div>
+                              <p className="font-semibold text-slate-900 text-sm sm:text-base">
+                                {item.product_name}
+                              </p>
+                              <p className="text-xs sm:text-sm text-slate-600">
+                                {item.branch_name}
+                              </p>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="quantity" className="text-sm">
+                                Current Quantity
+                              </Label>
+                              <Input
+                                id="quantity"
+                                type="number"
+                                value={formData.quantity || ""}
+                                onChange={(e) =>
+                                  setFormData({
+                                    ...formData,
+                                    quantity: parseInt(e.target.value) || 0,
+                                  })
+                                }
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="reorder" className="text-sm">Reorder Level</Label>
+                              <Input
+                                id="reorder"
+                                type="number"
+                                value={formData.reorderLevel || ""}
+                                onChange={(e) =>
+                                  setFormData({
+                                    ...formData,
+                                    reorderLevel:
+                                      parseInt(e.target.value) || 0,
+                                  })
+                                }
+                              />
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                              <Button
+                                onClick={handleSaveInventory}
+                                className="flex-1 bg-primary hover:bg-primary/90"
+                              >
+                                Update Stock
+                              </Button>
+                              <Button
+                                onClick={() => setIsDialogOpen(false)}
+                                variant="outline"
+                                className="flex-1"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDelete(item.id)}
+                        disabled={deleteInventoryMutation.isPending}
+                        className="flex-1 gap-2 text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto -mx-4 sm:mx-0">
               <table className="w-full text-sm min-w-[900px]">
                 <thead>
                   <tr className="border-b border-slate-200">

@@ -174,6 +174,14 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
       return;
     }
 
+    // Accounts created via Google OAuth should continue using Google sign-in.
+    if (user.google_id && String(user.password_hash || "").startsWith("oauth-google-")) {
+      res.status(401).json({
+        error: "This account uses Google sign-in. Please click Continue with Google.",
+      });
+      return;
+    }
+
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
     if (!isValidPassword) {
       res.status(401).json({ error: "Invalid username/email or password" });

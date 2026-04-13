@@ -419,6 +419,7 @@ async function ensureSchema(connection: PgConnection) {
       email TEXT UNIQUE NOT NULL,
       phone TEXT NOT NULL,
       password_hash TEXT NOT NULL,
+      google_id TEXT UNIQUE,
       role TEXT NOT NULL CHECK (role IN ('admin', 'branch_admin', 'pos_operator', 'customer', 'rider')),
       branch_id TEXT NULL REFERENCES branches(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -860,11 +861,13 @@ export async function initializeDatabase() {
         email VARCHAR(255) UNIQUE NOT NULL,
         phone VARCHAR(50) NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
+        google_id VARCHAR(255) NULL,
         role ENUM('admin', 'branch_admin', 'pos_operator', 'customer', 'rider') NOT NULL,
         branch_id VARCHAR(255),
         created_at DATETIME NOT NULL,
         INDEX idx_email (email),
-        INDEX idx_role (role)
+        INDEX idx_role (role),
+        UNIQUE KEY uniq_google_id (google_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
 

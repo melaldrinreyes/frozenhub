@@ -160,11 +160,7 @@ export default function AdminDashboard() {
   // Fetch inventory (all branches)
   const { data: inventoryData, isLoading: isLoadingInventory } = useQuery({
     queryKey: ["inventory-admin"],
-    queryFn: async () => {
-      const response = await fetch('/api/inventory');
-      if (!response.ok) throw new Error('Failed to fetch inventory');
-      return response.json();
-    },
+    queryFn: () => apiClient.getInventory(),
   });
 
   // Fetch products for category distribution chart
@@ -212,7 +208,18 @@ export default function AdminDashboard() {
       }))
       .sort((a, b) => b.value - a.value);
   }, [productsData]);
-  const totalProducts = inventoryData?.inventory?.length || 0;
+  const totalProducts = Number(
+    systemStatsData?.stats?.products?.total ??
+    productsData?.products?.length ??
+    inventoryData?.inventory?.length ??
+    0
+  );
+  const isTotalProductsLoading =
+    totalProducts === 0 &&
+    !systemStatsData &&
+    !productsData &&
+    !inventoryData &&
+    (isLoadingStats || isLoadingProducts || isLoadingInventory);
   const totalRevenue = systemStatsData?.stats?.sales?.revenue || 0;
   const totalSales = systemStatsData?.stats?.sales?.total || 0;
   const activeBranches = branchesData?.branches?.filter((b: any) => b.is_active)?.length || 0;
@@ -255,7 +262,7 @@ export default function AdminDashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              {isLoadingInventory ? (
+              {isTotalProductsLoading ? (
                 <div className="text-xl sm:text-2xl font-bold text-blue-700 animate-pulse">...</div>
               ) : (
                 <>

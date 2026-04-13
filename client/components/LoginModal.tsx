@@ -37,14 +37,15 @@ export default function LoginModal({ onClose }: LoginModalProps) {
 
   const handleGoogleSignIn = async () => {
     setError("");
+    setLoading(true);
     try {
       await signInWithGoogle();
-      navigate("/customer/shop");
-      onClose();
     } catch (err: any) {
       const errorMessage = err?.message || "Google sign-in failed. Please try again.";
       setError(errorMessage);
       console.error("Google sign-in error:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -176,9 +177,10 @@ export default function LoginModal({ onClose }: LoginModalProps) {
               type="button"
               variant="outline"
               onClick={handleGoogleSignIn}
+              disabled={loading}
               className="w-full justify-center gap-2 border-slate-300 bg-white hover:bg-slate-50"
             >
-              Continue with Google
+              {loading ? "Redirecting to Google..." : "Continue with Google"}
             </Button>
             <p className="text-xs text-center text-slate-500">
               Google sign-in creates or opens a customer account automatically.
