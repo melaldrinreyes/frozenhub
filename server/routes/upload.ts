@@ -59,8 +59,8 @@ export const upload = multer({
   },
 });
 
-// Banner storage configuration
-const bannerStorage = multer.diskStorage({
+// Banner storage configuration - use memory storage in serverless, disk elsewhere
+const bannerStorage = isServerless ? multer.memoryStorage() : multer.diskStorage({
   destination: (_req, _file, cb) => {
     ensureUploadDirs(); // Create directories on demand
     cb(null, bannersDir);
@@ -147,7 +147,19 @@ export const handleUploadBanner: RequestHandler = (req, res) => {
       return;
     }
 
-    // Return the file path relative to public directory
+    // In serverless runtimes, use data URLs so logos remain viewable
+    if (isServerless && req.file.buffer) {
+      const mimeType = req.file.mimetype || "image/jpeg";
+      const base64 = req.file.buffer.toString("base64");
+      const imagePath = `data:${mimeType};base64,${base64}`;
+      res.json({ 
+        message: "Banner uploaded successfully",
+        imagePath 
+      });
+      return;
+    }
+
+    // Return the file path relative to public directory (disk-based environments)
     const imagePath = `/uploads/banners/${req.file.filename}`;
     res.json({ 
       message: "Banner uploaded successfully",
@@ -169,7 +181,13 @@ export const handleDeleteBanner: RequestHandler = (req, res) => {
       return;
     }
 
-    // Extract filename from path
+    // Data URLs (from serverless environments) don't need deletion
+    if (imagePath.startsWith("data:")) {
+      res.json({ message: "Banner deleted successfully" });
+      return;
+    }
+
+    // Extract filename from path for disk-based environments
     const filename = path.basename(imagePath);
     const filePath = path.join(bannersDir, filename);
 
