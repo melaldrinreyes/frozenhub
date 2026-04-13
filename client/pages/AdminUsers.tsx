@@ -36,8 +36,6 @@ import {
   Trash2,
   Search,
   Shield,
-  Check,
-  X,
   Mail,
   Phone,
   Building,
@@ -126,35 +124,6 @@ export default function AdminUsers() {
     },
   });
 
-  const toggleRiderStatusMutation = useMutation({
-    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
-      apiClient.updateUser(id, { active }),
-    onSuccess: (response: any, variables) => {
-      queryClient.setQueryData(["users"], (oldData: any) => {
-        if (!oldData?.users) return oldData;
-
-        const returnedUser = response?.user;
-        const nextActive = parseActiveValue(returnedUser?.active ?? variables.active);
-        return {
-          ...oldData,
-          users: oldData.users.map((user: any) =>
-            user.id === variables.id
-              ? {
-                  ...user,
-                  ...(returnedUser || {}),
-                  active: nextActive,
-                }
-              : user
-          ),
-        };
-      });
-      queryClient.invalidateQueries({ queryKey: ["users"] });
-    },
-    onError: (error: any) => {
-      alert(error.message || "Failed to update rider status");
-    },
-  });
-
   // Delete user mutation
   const deleteUserMutation = useMutation({
     mutationFn: (id: string) => apiClient.deleteUser(id),
@@ -189,40 +158,6 @@ export default function AdminUsers() {
   const getRoleLabel = (role: string) => {
     return ROLES.find((r) => r.value === role)?.label || role;
   };
-
-  const parseActiveValue = (raw: any): boolean => {
-    if (raw === undefined || raw === null) return true;
-    if (typeof raw === "boolean") return raw;
-    if (typeof raw === "number") return raw === 1;
-
-    // Handle MySQL BIT values serialized as Buffer-like objects.
-    if (typeof raw === "object" && raw !== null) {
-      const maybeBufferArray =
-        Array.isArray((raw as any).data) ? (raw as any).data :
-        Array.isArray(raw) ? raw :
-        raw instanceof Uint8Array ? Array.from(raw) :
-        null;
-
-      if (maybeBufferArray && maybeBufferArray.length > 0) {
-        return Number(maybeBufferArray[0]) === 1;
-      }
-    }
-
-    const normalized = String(raw).trim().toLowerCase();
-    if (["1", "true", "yes", "enabled"].includes(normalized)) return true;
-    if (["0", "false", "no", "disabled"].includes(normalized)) return false;
-
-    return Boolean(raw);
-  };
-
-  const isUserActive = (user: any) => parseActiveValue(user?.active);
-
-  const getStatusStyles = (user: any) =>
-    isUserActive(user)
-      ? "bg-emerald-600 text-white border border-emerald-700 shadow-sm"
-      : "bg-rose-600 text-white border border-rose-700 shadow-sm";
-
-  const getStatusLabel = (user: any) => (isUserActive(user) ? "Enabled" : "Disabled");
 
   const handleOpenDialog = (user?: any) => {
     if (user) {
@@ -288,15 +223,6 @@ export default function AdminUsers() {
     setConfirmDialog({ type: "delete-user", user: targetUser });
   };
 
-  const handleToggleRiderStatus = (user: any) => {
-    if (user.role !== "rider") return;
-    const riderIsActive = isUserActive(user);
-    toggleRiderStatusMutation.mutate({
-      id: user.id,
-      active: !riderIsActive,
-    });
-  };
-
   const handleConfirmDialogAction = () => {
     if (!confirmDialog) return;
 
@@ -306,7 +232,6 @@ export default function AdminUsers() {
   };
 
   const adminCount = users.filter((u: any) => u.role === "admin").length;
-  const activeCount = users.filter((u: any) => isUserActive(u)).length;
 
   if (isLoading) {
     return (
@@ -476,7 +401,7 @@ export default function AdminUsers() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium">Total Users</CardTitle>
@@ -485,19 +410,6 @@ export default function AdminUsers() {
             <CardContent>
               <div className="text-xl sm:text-2xl font-bold">{users.length}</div>
               <p className="text-xs text-slate-600 mt-1">All system users</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">
-                Active Users
-              </CardTitle>
-              <Check className="w-4 h-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-xl sm:text-2xl font-bold">{activeCount}</div>
-              <p className="text-xs text-slate-600 mt-1">Currently active</p>
             </CardContent>
           </Card>
 
@@ -657,25 +569,6 @@ export default function AdminUsers() {
                             {user.branch_id ? (branchMap[user.branch_id] || user.branch_id) : "-"}
                           </p>
                         </div>
-                        {user.role === "rider" && (
-                          <div className="col-span-2 bg-white rounded-lg p-3 border border-slate-100">
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <p className="text-xs font-medium text-slate-500">Rider Status</p>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleToggleRiderStatus(user)}
-                                  disabled={toggleRiderStatusMutation.isPending}
-                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold mt-1 h-auto ${getStatusStyles(user)} hover:opacity-90`}
-                                >
-                                  <span className="h-1.5 w-1.5 rounded-full bg-white/90" />
-                                  {getStatusLabel(user)}
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
                         <div className="col-span-2 bg-white rounded-lg p-3 border border-slate-100">
                           <div className="flex items-center gap-2 mb-2">
                             <Calendar className="w-3.5 h-3.5 text-slate-600" />
@@ -718,9 +611,6 @@ export default function AdminUsers() {
                       Joined
                     </th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">
-                      Status
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">
                       Actions
                     </th>
                   </tr>
@@ -746,22 +636,6 @@ export default function AdminUsers() {
                       </td>
                       <td className="py-3 px-4 text-slate-600">
                         {new Date(user.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="py-3 px-4">
-                        {user.role === "rider" ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleToggleRiderStatus(user)}
-                            disabled={toggleRiderStatusMutation.isPending}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold h-auto ${getStatusStyles(user)} hover:opacity-90`}
-                          >
-                            <span className="h-1.5 w-1.5 rounded-full bg-white/90" />
-                            {getStatusLabel(user)}
-                          </Button>
-                        ) : (
-                          <span className="text-xs font-medium text-slate-400">-</span>
-                        )}
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex gap-2">
