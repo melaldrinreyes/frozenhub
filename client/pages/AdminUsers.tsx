@@ -745,12 +745,16 @@ export default function AdminUsers() {
                         {new Date(user.created_at).toLocaleDateString()}
                       </td>
                       <td className="py-3 px-4">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${getStatusStyles(user)}`}
-                        >
-                          <span className="h-1.5 w-1.5 rounded-full bg-white/90" />
-                          {getStatusLabel(user)}
-                        </span>
+                        {user.role === "rider" ? (
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${getStatusStyles(user)}`}
+                          >
+                            <span className="h-1.5 w-1.5 rounded-full bg-white/90" />
+                            {getStatusLabel(user)}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-medium text-slate-400">-</span>
+                        )}
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex gap-2">
