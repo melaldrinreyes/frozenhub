@@ -55,7 +55,6 @@ interface RiderUser {
   id: string;
   name: string;
   branch_id?: string | null;
-  active?: boolean;
 }
 
 interface OrderItem {
@@ -132,20 +131,10 @@ export default function BranchOnlineOrders() {
     queryKey: ["branch-riders", user?.branch_id],
     queryFn: async () => {
       const result = await apiClient.getUsers({ role: "rider", branchId: user?.branch_id });
-      return (result.users || []).map((r: any) => ({
-        id: r.id,
-        name: r.name,
-        branch_id: r.branch_id,
-        active: r.active !== false,
-      }));
+      return (result.users || []).map((r: any) => ({ id: r.id, name: r.name, branch_id: r.branch_id }));
     },
     enabled: !!user?.branch_id,
   });
-
-  const activeRiders = useMemo(
-    () => riders.filter((rider: RiderUser) => rider.active !== false),
-    [riders],
-  );
 
   // Filter orders by status
   const filteredOrders = useMemo(() => {
@@ -232,17 +221,7 @@ export default function BranchOnlineOrders() {
     if (!riderId) {
       toast({
         title: "Select rider",
-        description: "Choose an available rider first.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const riderIsActive = activeRiders.some((rider: RiderUser) => rider.id === riderId);
-    if (!riderIsActive) {
-      toast({
-        title: "Rider unavailable",
-        description: "This rider is disabled. Please choose an active rider.",
+        description: "Choose a rider first.",
         variant: "destructive",
       });
       return;
@@ -315,19 +294,19 @@ export default function BranchOnlineOrders() {
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-orange-900">
                     {newPendingOrders.length} New Order{newPendingOrders.length > 1 ? 's' : ''}!
-                  </h3>
+                                  {riders.length === 0 && (
                   <Badge className="bg-orange-500 text-white">NEW</Badge>
-                </div>
+                                      No riders assigned to this branch
                 <p className="text-sm text-orange-700 mt-0.5">
                   You have {newPendingOrders.length} new pending order{newPendingOrders.length > 1 ? 's' : ''} waiting for confirmation
-                </p>
-              </div>
-              <Button
-                size="sm"
-                onClick={() => setStatusFilter("pending")}
-                className="bg-orange-500 hover:bg-orange-600 text-white"
-              >
-                View Orders
+                                  {riders.map((rider: RiderUser) => {
+                                    const isBusy = busyRiderIds.has(rider.id) && rider.id !== order.assigned_rider_id;
+                                    return (
+                                      <SelectItem key={rider.id} value={rider.id} disabled={isBusy}>
+                                        {isBusy ? `${rider.name} (Busy)` : rider.name}
+                                      </SelectItem>
+                                    );
+                                  })}
               </Button>
             </div>
           </div>
@@ -615,12 +594,12 @@ export default function BranchOnlineOrders() {
                                   <SelectValue placeholder="Select rider" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {activeRiders.length === 0 && (
+                                  {riders.length === 0 && (
                                     <SelectItem value="__no_riders" disabled>
-                                      No active riders available in this branch
+                                      No riders assigned to this branch
                                     </SelectItem>
                                   )}
-                                  {activeRiders.map((rider: RiderUser) => {
+                                  {riders.map((rider: RiderUser) => {
                                     const isBusy = busyRiderIds.has(rider.id) && rider.id !== order.assigned_rider_id;
                                     return (
                                       <SelectItem key={rider.id} value={rider.id} disabled={isBusy}>
@@ -628,7 +607,6 @@ export default function BranchOnlineOrders() {
                                       </SelectItem>
                                     );
                                   })}
-                                </SelectContent>
                               </Select>
 
                               <Button
@@ -671,20 +649,19 @@ export default function BranchOnlineOrders() {
                                   <SelectValue placeholder="Select rider" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {activeRiders.length === 0 && (
-                                    <SelectItem value="__no_riders" disabled>
-                                      No active riders available in this branch
-                                    </SelectItem>
-                                  )}
-                                  {activeRiders.map((rider: RiderUser) => {
-                                    const isBusy = busyRiderIds.has(rider.id) && rider.id !== order.assigned_rider_id;
-                                    return (
-                                      <SelectItem key={rider.id} value={rider.id} disabled={isBusy}>
-                                        {isBusy ? `${rider.name} (Busy)` : rider.name}
+                                    {riders.length === 0 && (
+                                      <SelectItem value="__no_riders" disabled>
+                                        No riders assigned to this branch
                                       </SelectItem>
-                                    );
-                                  })}
-                                </SelectContent>
+                                    )}
+                                    {riders.map((rider: RiderUser) => {
+                                      const isBusy = busyRiderIds.has(rider.id) && rider.id !== order.assigned_rider_id;
+                                      return (
+                                        <SelectItem key={rider.id} value={rider.id} disabled={isBusy}>
+                                          {isBusy ? `${rider.name} (Busy)` : rider.name}
+                                        </SelectItem>
+                                      );
+                                    })}
                               </Select>
 
                               <Button

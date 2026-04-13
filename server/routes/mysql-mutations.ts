@@ -139,28 +139,6 @@ async function tableColumnExists(connection: any, tableName: string, columnName:
   }
 }
 
-async function usersActiveColumnExists(connection: any): Promise<boolean> {
-  try {
-    const [rows] = await connection.query("SHOW COLUMNS FROM users LIKE 'active'");
-    return (rows as any[]).length > 0;
-  } catch {
-    return false;
-  }
-}
-
-async function ensureUsersActiveColumn(connection: any): Promise<boolean> {
-  const hasActive = await usersActiveColumnExists(connection);
-  if (hasActive) return true;
-
-  try {
-    await connection.query("ALTER TABLE users ADD COLUMN active BOOLEAN NOT NULL DEFAULT TRUE");
-    return true;
-  } catch (error) {
-    console.warn("Could not auto-add users.active column:", (error as any)?.message || error);
-    return false;
-  }
-}
-
 async function verifyCurrentUserPassword(
   connection: any,
   req: any,
@@ -1131,37 +1109,11 @@ export const handleGetUsersMySQL: RequestHandler = async (req, res) => {
   let connection;
   try {
     connection = await getConnection();
-    const hasUserActiveColumn = await ensureUsersActiveColumn(connection);
-
     const hasAssignmentTable = await tableExists(connection, "rider_branch_assignments");
     const hasAssignmentRiderIdColumn = hasAssignmentTable
       ? await tableColumnExists(connection, "rider_branch_assignments", "rider_id")
       : false;
-    const hasAssignmentActiveColumn = hasAssignmentTable
-      ? await tableColumnExists(connection, "rider_branch_assignments", "active")
-      : false;
-    const hasAssignmentBranchColumn = hasAssignmentTable
-      ? await tableColumnExists(connection, "rider_branch_assignments", "branch_id")
-      : false;
-    const canUseAssignmentForActive =
-      hasAssignmentTable && hasAssignmentRiderIdColumn && hasAssignmentActiveColumn;
-    const canUseAssignmentForBranch =
-      canUseAssignmentForActive && hasAssignmentBranchColumn;
-
-    const assignmentJoin = canUseAssignmentForActive
-      ? `LEFT JOIN (
-           SELECT rider_id,
-                  MAX(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as has_active${canUseAssignmentForBranch ? ",\n                  MAX(CASE WHEN active = TRUE THEN branch_id ELSE NULL END) as active_branch_id" : ""}
-           FROM rider_branch_assignments
-           GROUP BY rider_id
-         ) rba ON rba.rider_id = u.id`
-      : "";
-    const branchExpr = canUseAssignmentForBranch
-      ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.active_branch_id, u.branch_id) ELSE u.branch_id END"
-      : "u.branch_id";
-    const activeExpr = hasUserActiveColumn
-      ? "IF(CAST(u.active AS UNSIGNED) = 1, 1, 0)"
-      : "TRUE";
+    const branchExpr = "u.branch_id";
 
     const clauses: string[] = [];
     const values: any[] = [];
@@ -1186,11 +1138,9 @@ export const handleGetUsersMySQL: RequestHandler = async (req, res) => {
     const [rows] = await connection.query(
       `SELECT u.id, u.name, u.email, u.phone, u.role,
               ${branchExpr} as branch_id,
-              ${activeExpr} as active,
               u.created_at,
               b.name as branch_name
        FROM users u
-      ${assignmentJoin}
        LEFT JOIN branches b ON b.id = ${branchExpr}
        ${where}
        ORDER BY u.created_at DESC`,
@@ -1220,22 +1170,13 @@ export const handleCreateUserMySQL: RequestHandler = async (req, res) => {
   let connection;
   try {
     connection = await getConnection();
-    const hasUserActiveColumn = await ensureUsersActiveColumn(connection);
     const passwordHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
 
-    if (hasUserActiveColumn) {
-      await connection.query(
-        `INSERT INTO users (id, name, email, phone, password_hash, role, branch_id, active, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, NOW())`,
-        [id, name, email, phone, passwordHash, normalizedRole, normalizedBranchId]
-      );
-    } else {
-      await connection.query(
-        `INSERT INTO users (id, name, email, phone, password_hash, role, branch_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
-        [id, name, email, phone, passwordHash, normalizedRole, normalizedBranchId]
-      );
-    }
+    await connection.query(
+      `INSERT INTO users (id, name, email, phone, password_hash, role, branch_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [id, name, email, phone, passwordHash, normalizedRole, normalizedBranchId]
+    );
 
     if (normalizedRole === "rider" && normalizedBranchId) {
       await upsertRiderBranchAssignment(connection, id, String(normalizedBranchId), req.user?.id || null);
@@ -1274,7 +1215,7 @@ export const handleCreateUserMySQL: RequestHandler = async (req, res) => {
 
 export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
   const { id } = req.params;
-  const { name, email, phone, role, branch_id, branchId, password, active } = req.body || {};
+  const { name, email, phone, role, branch_id, branchId, password } = req.body || {};
   const normalizedBranchId = branch_id !== undefined ? branch_id : branchId;
 
   const updates: string[] = [];
@@ -1310,12 +1251,7 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
     updates.push("password_hash = ?");
     values.push(passwordHash);
   }
-  if (active !== undefined) {
-    updates.push("active = ?");
-    values.push(!!active);
-  }
-
-  if (updates.length === 0 && active === undefined) {
+  if (updates.length === 0) {
     res.status(400).json({ error: "No fields to update" });
     return;
   }
@@ -1323,37 +1259,16 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
   let connection;
   try {
     connection = await getConnection();
-    const hasUserActiveColumn = await ensureUsersActiveColumn(connection);
 
     values.push(id);
     const [beforeRows] = await connection.query(
-      `SELECT role, branch_id, ${hasUserActiveColumn ? "active" : "TRUE as active"} FROM users WHERE id = ? LIMIT 1`,
+      `SELECT role, branch_id FROM users WHERE id = ? LIMIT 1`,
       [id]
     );
     const existingUser = (beforeRows as any[])[0];
     if (!existingUser) {
       res.status(404).json({ error: "User not found" });
       return;
-    }
-
-    const targetRole = role !== undefined ? normalizeRole(role) : String(existingUser.role);
-    if (targetRole === "rider" && active !== undefined && req.user?.role !== "admin") {
-      res.status(403).json({ error: "Only admins can enable or disable rider accounts" });
-      return;
-    }
-
-    // If users.active does not exist yet, allow rider status updates via rider assignment table.
-    if (active !== undefined && !hasUserActiveColumn) {
-      const activeUpdateIndex = updates.indexOf("active = ?");
-      if (activeUpdateIndex >= 0) {
-        updates.splice(activeUpdateIndex, 1);
-        values.splice(activeUpdateIndex, 1);
-      }
-
-      if (targetRole !== "rider") {
-        res.status(500).json({ error: "User status update unavailable until users.active column is ready" });
-        return;
-      }
     }
 
     if (updates.length > 0) {
@@ -1364,42 +1279,11 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
       }
     }
 
-    const hasAssignmentTable = await tableExists(connection, "rider_branch_assignments");
-    const hasAssignmentRiderIdColumn = hasAssignmentTable
-      ? await tableColumnExists(connection, "rider_branch_assignments", "rider_id")
-      : false;
-    const hasAssignmentActiveColumn = hasAssignmentTable
-      ? await tableColumnExists(connection, "rider_branch_assignments", "active")
-      : false;
-    const hasAssignmentBranchColumn = hasAssignmentTable
-      ? await tableColumnExists(connection, "rider_branch_assignments", "branch_id")
-      : false;
-    const canUseAssignmentForActive =
-      hasAssignmentTable && hasAssignmentRiderIdColumn && hasAssignmentActiveColumn;
-    const canUseAssignmentForBranch =
-      canUseAssignmentForActive && hasAssignmentBranchColumn;
-
-    const assignmentJoin = canUseAssignmentForActive
-      ? `LEFT JOIN (
-           SELECT rider_id,
-                  MAX(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as has_active${canUseAssignmentForBranch ? ",\n                  MAX(CASE WHEN active = TRUE THEN branch_id ELSE NULL END) as active_branch_id" : ""}
-           FROM rider_branch_assignments
-           GROUP BY rider_id
-         ) rba ON rba.rider_id = u.id`
-      : "";
-    const selectActiveExpr = hasUserActiveColumn
-      ? "IF(CAST(u.active AS UNSIGNED) = 1, 1, 0)"
-      : "TRUE";
-    const selectBranchExpr = canUseAssignmentForBranch
-      ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.active_branch_id, u.branch_id) ELSE u.branch_id END"
-      : "u.branch_id";
-
     const [rows] = await connection.query(
-      `SELECT u.id, u.name, u.email, u.phone, u.role, ${selectActiveExpr} as active,
-              ${selectBranchExpr} as branch_id,
+      `SELECT u.id, u.name, u.email, u.phone, u.role,
+              u.branch_id,
               u.created_at
        FROM users u
-       ${assignmentJoin}
        WHERE u.id = ?
        LIMIT 1`,
       [id]
@@ -1415,14 +1299,7 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
       entityId: id,
       entityName: updatedUser?.name || id,
       description: `User ${updatedUser?.name || id} updated`,
-      metadata: {
-        email,
-        phone,
-        role,
-        active,
-        branch_id: normalizedBranchId,
-        password_changed: String(password || "").trim().length > 0,
-      },
+      metadata: { email, phone, role, branch_id: normalizedBranchId, password_changed: String(password || "").trim().length > 0 },
       ipAddress: req.ip || null,
       branchId: updatedUser?.branch_id || normalizedBranchId || null,
     });

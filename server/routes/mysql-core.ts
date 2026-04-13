@@ -1,4 +1,4 @@
-import { RequestHandler } from "express";
+﻿import { RequestHandler } from "express";
 import bcrypt from "bcryptjs";
 import { getConnection } from "../db";
 import { AuthUser } from "../middleware/auth";
@@ -127,31 +127,6 @@ async function tableExists(connection: any, tableName: string): Promise<boolean>
   return Number((rows as any[])[0]?.cnt || 0) > 0;
 }
 
-async function usersActiveColumnExists(connection: any): Promise<boolean> {
-  try {
-    const [rows] = await connection.query("SHOW COLUMNS FROM users LIKE 'active'");
-    return (rows as any[]).length > 0;
-  } catch {
-    return false;
-  }
-}
-
-function isFalseLike(value: any): boolean {
-  if (typeof value === "object" && value !== null) {
-    const maybeArray = Array.isArray((value as any).data)
-      ? (value as any).data
-      : Array.isArray(value)
-        ? value
-        : value instanceof Uint8Array
-          ? Array.from(value)
-          : null;
-    if (maybeArray && maybeArray.length > 0) {
-      return Number(maybeArray[0]) === 0;
-    }
-  }
-  return value === false || value === 0 || String(value).toLowerCase() === "false";
-}
-
 function findDevFallbackUser(loginIdentifier: string, password: string): AuthUser | null {
   const normalizedIdentifier = String(loginIdentifier || "").trim().toLowerCase();
   const matched = getDevFallbackUsers().find((u) => {
@@ -196,14 +171,6 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
 
     if (!user) {
       res.status(401).json({ error: "Invalid username/email or password" });
-      return;
-    }
-
-    const hasUserActiveColumn = await usersActiveColumnExists(connection);
-    const isAccountDisabled = hasUserActiveColumn ? isFalseLike(user.active) : false;
-
-    if (isAccountDisabled) {
-      res.status(403).json({ error: "Account is disabled. Please contact an administrator." });
       return;
     }
 
@@ -285,7 +252,7 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
           branchId: authUser.branch_id || null,
         });
 
-        console.warn("⚠ Supabase/Postgres is unreachable; using fallback login");
+        console.warn("Warning: Supabase/Postgres is unreachable; using fallback login");
         res.json({ user: authUser, token });
         return;
       }
@@ -314,7 +281,7 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
           branchId: null,
         });
 
-        console.warn("⚠ Supabase/Postgres is unreachable; using fallback admin login");
+        console.warn("Warning: Supabase/Postgres is unreachable; using fallback admin login");
         res.json({ user: authUser, token });
         return;
       }
