@@ -150,9 +150,9 @@ export default function AdminUsers() {
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       toast({
-        title: variables.active ? "Rider enabled" : "Rider disabled",
+        title: variables.active ? "Account enabled" : "Account disabled",
         description: variables.active
-          ? "The rider can sign in and receive deliveries again."
+          ? "The rider account can sign in and receive deliveries again."
           : "The rider account is temporarily disabled.",
       });
     },
@@ -583,7 +583,7 @@ export default function AdminUsers() {
                                   ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                                   : "text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                               }`}
-                              title={user.active === false ? "Enable rider" : "Temporarily disable rider"}
+                              title={user.active === false ? "Enable account" : "Temporarily disable account"}
                             >
                               {user.active === false ? (
                                 <UserCheck className="w-4 h-4" />
@@ -669,7 +669,7 @@ export default function AdminUsers() {
                       Role
                     </th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">
-                      Status
+                      Account Status
                     </th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">
                       Branch
@@ -706,7 +706,7 @@ export default function AdminUsers() {
                               : "bg-emerald-100 text-emerald-800"
                           }`}
                         >
-                          {user.active === false ? "Disabled" : "Active"}
+                          {user.active === false ? "Disabled" : "Enabled"}
                         </span>
                       </td>
                       <td className="py-3 px-4 text-slate-600">
@@ -728,7 +728,7 @@ export default function AdminUsers() {
                                   ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-8 w-8 p-0"
                                   : "text-amber-600 hover:text-amber-700 hover:bg-amber-50 h-8 w-8 p-0"
                               }
-                              title={user.active === false ? "Enable rider" : "Temporarily disable rider"}
+                              title={user.active === false ? "Enable account" : "Temporarily disable account"}
                             >
                               {user.active === false ? (
                                 <UserCheck className="w-4 h-4" />
@@ -806,15 +806,15 @@ export default function AdminUsers() {
             <AlertDialogTitle>
               {confirmDialog?.type === "toggle-rider-status"
                 ? confirmDialog.nextActive
-                  ? "Enable Rider Account"
-                  : "Temporarily Disable Rider Account"
+                  ? "Enable Account"
+                  : "Temporarily Disable Account"
                 : "Delete User"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmDialog?.type === "toggle-rider-status"
                 ? confirmDialog.nextActive
-                  ? `Are you sure you want to enable ${confirmDialog?.user?.name}? The rider can sign in and accept deliveries again.`
-                  : `Are you sure you want to temporarily disable ${confirmDialog?.user?.name}? The rider will not be able to sign in until enabled again.`
+                  ? `Are you sure you want to enable ${confirmDialog?.user?.name}'s account? The rider can sign in and accept deliveries again.`
+                  : `Are you sure you want to temporarily disable ${confirmDialog?.user?.name}'s account? The rider will not be able to sign in until enabled again.`
                 : `Are you sure you want to delete user ${confirmDialog?.user?.name}? This action cannot be undone.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -832,8 +832,8 @@ export default function AdminUsers() {
             >
               {confirmDialog?.type === "toggle-rider-status"
                 ? confirmDialog.nextActive
-                  ? "Enable Rider"
-                  : "Disable Rider"
+                  ? "Enable Account"
+                  : "Disable Account"
                 : "Delete User"}
             </AlertDialogAction>
           </AlertDialogFooter>
