@@ -134,6 +134,7 @@ export default function AdminUsers() {
         if (!oldData?.users) return oldData;
 
         const returnedUser = response?.user;
+        const nextActive = parseActiveValue(returnedUser?.active ?? variables.active);
         return {
           ...oldData,
           users: oldData.users.map((user: any) =>
@@ -141,7 +142,7 @@ export default function AdminUsers() {
               ? {
                   ...user,
                   ...(returnedUser || {}),
-                  active: returnedUser?.active ?? variables.active,
+                  active: nextActive,
                 }
               : user
           ),
@@ -189,10 +190,19 @@ export default function AdminUsers() {
     return ROLES.find((r) => r.value === role)?.label || role;
   };
 
-  const isUserActive = (user: any) => {
-    const raw = user?.active;
-    return !(raw === false || raw === 0 || String(raw).toLowerCase() === "false");
+  const parseActiveValue = (raw: any): boolean => {
+    if (raw === undefined || raw === null) return true;
+    if (typeof raw === "boolean") return raw;
+    if (typeof raw === "number") return raw === 1;
+
+    const normalized = String(raw).trim().toLowerCase();
+    if (["1", "true", "yes", "enabled"].includes(normalized)) return true;
+    if (["0", "false", "no", "disabled"].includes(normalized)) return false;
+
+    return Boolean(raw);
   };
+
+  const isUserActive = (user: any) => parseActiveValue(user?.active);
 
   const getStatusStyles = (user: any) =>
     isUserActive(user)
