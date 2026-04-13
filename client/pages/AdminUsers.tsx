@@ -71,7 +71,7 @@ export default function AdminUsers() {
   const [password, setPassword] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<
     | {
-        type: "toggle-rider" | "delete-user";
+        type: "delete-user";
         user: any;
       }
     | null
@@ -267,23 +267,17 @@ export default function AdminUsers() {
 
   const handleToggleRiderStatus = (user: any) => {
     if (user.role !== "rider") return;
-    setConfirmDialog({ type: "toggle-rider", user });
+    const riderIsActive = isUserActive(user);
+    toggleRiderStatusMutation.mutate({
+      id: user.id,
+      active: !riderIsActive,
+    });
   };
 
   const handleConfirmDialogAction = () => {
     if (!confirmDialog) return;
 
-    if (confirmDialog.type === "toggle-rider") {
-      const riderIsActive = isUserActive(confirmDialog.user);
-      toggleRiderStatusMutation.mutate({
-        id: confirmDialog.user.id,
-        active: !riderIsActive,
-      });
-    }
-
-    if (confirmDialog.type === "delete-user") {
-      deleteUserMutation.mutate(confirmDialog.user.id);
-    }
+    deleteUserMutation.mutate(confirmDialog.user.id);
 
     setConfirmDialog(null);
   };
@@ -814,28 +808,18 @@ export default function AdminUsers() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirmDialog?.type === "toggle-rider"
-                ? `${isUserActive(confirmDialog?.user) ? "Disable" : "Enable"} Rider`
-                : "Delete User"}
-            </AlertDialogTitle>
+            <AlertDialogTitle>Delete User</AlertDialogTitle>
             <AlertDialogDescription>
-              {confirmDialog?.type === "toggle-rider"
-                ? `Are you sure you want to ${isUserActive(confirmDialog?.user) ? "disable" : "enable"} rider ${confirmDialog?.user?.name}?`
-                : `Are you sure you want to delete user ${confirmDialog?.user?.name}? This action cannot be undone.`}
+              {`Are you sure you want to delete user ${confirmDialog?.user?.name}? This action cannot be undone.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDialogAction}
-              className={confirmDialog?.type === "delete-user" ? "bg-red-600 hover:bg-red-700" : undefined}
+              className="bg-red-600 hover:bg-red-700"
             >
-              {confirmDialog?.type === "toggle-rider"
-                ? isUserActive(confirmDialog?.user)
-                  ? "Disable Rider"
-                  : "Enable Rider"
-                : "Delete User"}
+              Delete User
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
