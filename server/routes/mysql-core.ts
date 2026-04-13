@@ -127,6 +127,31 @@ async function tableExists(connection: any, tableName: string): Promise<boolean>
   return Number((rows as any[])[0]?.cnt || 0) > 0;
 }
 
+async function usersActiveColumnExists(connection: any): Promise<boolean> {
+  try {
+    const [rows] = await connection.query("SHOW COLUMNS FROM users LIKE 'active'");
+    return (rows as any[]).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function isFalseLike(value: any): boolean {
+  if (typeof value === "object" && value !== null) {
+    const maybeArray = Array.isArray((value as any).data)
+      ? (value as any).data
+      : Array.isArray(value)
+        ? value
+        : value instanceof Uint8Array
+          ? Array.from(value)
+          : null;
+    if (maybeArray && maybeArray.length > 0) {
+      return Number(maybeArray[0]) === 0;
+    }
+  }
+  return value === false || value === 0 || String(value).toLowerCase() === "false";
+}
+
 function findDevFallbackUser(loginIdentifier: string, password: string): AuthUser | null {
   const normalizedIdentifier = String(loginIdentifier || "").trim().toLowerCase();
   const matched = getDevFallbackUsers().find((u) => {
@@ -157,18 +182,16 @@ async function isRiderAssignmentDisabled(connection: any, riderId: string): Prom
     if ((tableRows as any[]).length === 0) return false;
 
     const [rows] = await connection.query(
-      `SELECT active
+      `SELECT MAX(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as has_active
        FROM rider_branch_assignments
-       WHERE rider_id = ?
-       ORDER BY updated_at DESC, created_at DESC
-       LIMIT 1`,
+       WHERE rider_id = ?`,
       [riderId]
     );
 
     const record = (rows as any[])[0];
     if (!record) return false;
 
-    return record.active === false || record.active === 0 || String(record.active).toLowerCase() === "false";
+    return Number(record.has_active || 0) === 0;
   } catch {
     return false;
   }
@@ -197,9 +220,11 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
       return;
     }
 
-    const userDisabled =
-      user.active === false || user.active === 0 || String(user.active).toLowerCase() === "false";
-    const riderDisabled = user.role === "rider" ? await isRiderAssignmentDisabled(connection, String(user.id)) : false;
+    const hasUserActiveColumn = await usersActiveColumnExists(connection);
+    const userDisabled = hasUserActiveColumn ? isFalseLike(user.active) : false;
+    const riderDisabled = !hasUserActiveColumn && user.role === "rider"
+      ? await isRiderAssignmentDisabled(connection, String(user.id))
+      : false;
 
     if (userDisabled || riderDisabled) {
       res.status(403).json({ error: "Account is disabled. Please contact an administrator." });

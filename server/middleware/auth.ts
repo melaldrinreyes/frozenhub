@@ -42,16 +42,31 @@ async function usersActiveColumnExists(connection: any): Promise<boolean> {
 }
 
 function isFalseLike(value: any): boolean {
+  if (typeof value === "object" && value !== null) {
+    const maybeArray = Array.isArray((value as any).data)
+      ? (value as any).data
+      : Array.isArray(value)
+        ? value
+        : value instanceof Uint8Array
+          ? Array.from(value)
+          : null;
+    if (maybeArray && maybeArray.length > 0) {
+      return Number(maybeArray[0]) === 0;
+    }
+  }
   return value === false || value === 0 || String(value).toLowerCase() === "false";
 }
 
 async function isAccountDisabled(connection: any, userId: string, role: string): Promise<boolean> {
   const hasUserActive = await usersActiveColumnExists(connection);
   if (hasUserActive) {
-    const [userRows] = await connection.query("SELECT active FROM users WHERE id = ? LIMIT 1", [userId]);
+    const [userRows] = await connection.query(
+      "SELECT IF(CAST(active AS UNSIGNED) = 1, 1, 0) as active FROM users WHERE id = ? LIMIT 1",
+      [userId]
+    );
     const user = (userRows as any[])[0];
     if (!user) return true;
-    if (isFalseLike(user.active)) return true;
+    return isFalseLike(user.active);
   }
 
   if (role !== "rider") return false;
@@ -60,17 +75,14 @@ async function isAccountDisabled(connection: any, userId: string, role: string):
   if (!hasAssignmentTable) return false;
 
   const [assignmentRows] = await connection.query(
-    `SELECT active
+    `SELECT MAX(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as has_active
      FROM rider_branch_assignments
-     WHERE rider_id = ?
-     ORDER BY updated_at DESC, created_at DESC
-     LIMIT 1`,
+     WHERE rider_id = ?`,
     [userId]
   );
   const assignment = (assignmentRows as any[])[0];
   if (!assignment) return false;
-
-  return isFalseLike(assignment.active);
+  return Number(assignment.has_active || 0) === 0;
 }
 
 // Middleware to check if user is authenticated (session or JWT)
