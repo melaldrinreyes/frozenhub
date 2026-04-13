@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
 import { Printer, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/lib/apiClient';
 
 interface ReceiptProps {
   saleData: {
@@ -29,6 +31,32 @@ interface ReceiptProps {
 const Receipt: React.FC<ReceiptProps> = ({ saleData, branchName, onClose, onPrint }) => {
   const formatCurrency = (amount: number) => `₱${amount.toFixed(2)}`;
 
+  // Fetch company branding
+  const { data: companyLogoData } = useQuery({
+    queryKey: ["setting", "company_logo"],
+    queryFn: async () => {
+      try {
+        return await apiClient.getSetting("company_logo");
+      } catch {
+        return { setting: null };
+      }
+    },
+  });
+
+  const { data: companyNameData } = useQuery({
+    queryKey: ["setting", "company_name"],
+    queryFn: async () => {
+      try {
+        return await apiClient.getSetting("company_name");
+      } catch {
+        return { setting: { setting_value: "Batangas Premium Bongabong" } };
+      }
+    },
+  });
+
+  const companyLogo = companyLogoData?.setting?.setting_value;
+  const companyName = companyNameData?.setting?.setting_value || "Batangas Premium Bongabong";
+
   // Keyboard shortcut: Ctrl/Cmd+P to print
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -50,9 +78,13 @@ const Receipt: React.FC<ReceiptProps> = ({ saleData, branchName, onClose, onPrin
         <div className="bg-gradient-to-r from-black via-gray-900 to-black text-white p-3 sm:p-4">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 bg-gold-400 rounded-full flex items-center justify-center">
-                <span className="text-black font-bold text-sm">B</span>
-              </div>
+              {companyLogo ? (
+                <img src={companyLogo} alt={companyName} className="w-8 h-8 object-contain" />
+              ) : (
+                <div className="w-8 h-8 bg-gold-400 rounded-full flex items-center justify-center">
+                  <span className="text-black font-bold text-sm">B</span>
+                </div>
+              )}
               <div className="min-w-0">
                 <h2 className="text-base sm:text-lg font-bold truncate">{branchName || saleData.branchName || "Branch"}</h2>
                 <p className="text-xs text-gray-300">Point of Sale Receipt</p>
@@ -73,7 +105,13 @@ const Receipt: React.FC<ReceiptProps> = ({ saleData, branchName, onClose, onPrin
         <div id="receipt-content" className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
           {/* Store Info */}
           <div className="text-center border-b border-gray-200 pb-4">
-            <h3 className="font-bold text-lg">{branchName || saleData.branchName || "Branch"}</h3>
+            {companyLogo && (
+              <div className="flex justify-center mb-2">
+                <img src={companyLogo} alt={companyName} className="h-8 object-contain" />
+              </div>
+            )}
+            <h3 className="font-bold text-lg">{companyName}</h3>
+            <p className="text-xs text-gray-600 mb-1">{branchName || saleData.branchName || "Branch"}</p>
             <p className="text-sm text-gray-600">Frozen Foods & Products</p>
             <p className="text-xs text-gray-500">123 Main Street, Batangas</p>
             <p className="text-xs text-gray-500">Tel: (043) 123-4567</p>

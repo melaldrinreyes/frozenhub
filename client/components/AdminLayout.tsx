@@ -47,6 +47,32 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
 
   const isSystemAdmin = userRole === "admin" || user?.role === "admin";
 
+  // Fetch company branding
+  const { data: companyLogoData } = useQuery({
+    queryKey: ["setting", "company_logo"],
+    queryFn: async () => {
+      try {
+        return await apiClient.getSetting("company_logo");
+      } catch {
+        return { setting: null };
+      }
+    },
+  });
+
+  const { data: companyNameData } = useQuery({
+    queryKey: ["setting", "company_name"],
+    queryFn: async () => {
+      try {
+        return await apiClient.getSetting("company_name");
+      } catch {
+        return { setting: { setting_value: "Batangas Premium Bongabong" } };
+      }
+    },
+  });
+
+  const companyLogo = companyLogoData?.setting?.setting_value;
+  const companyName = companyNameData?.setting?.setting_value || "Batangas Premium Bongabong";
+
   // Fetch new pending orders count for branch admins
   const { data: newOrdersCount = 0 } = useQuery({
     queryKey: ["new-orders-count", user?.branch_id],
@@ -165,11 +191,15 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
           {/* Logo */}
           <div className="p-6 border-b border-gold-500/20">
             <Link to="/" className="flex items-center gap-3">
-              <div className="relative">
-                <Snowflake className="w-8 h-8 text-gold-400" />
-                <div className="absolute inset-0 bg-gold-400/20 blur-lg rounded-full" />
-              </div>
-              <h1 className="text-xl font-bold text-gold-400">Batangas Premium Bongabong</h1>
+              {companyLogo ? (
+                <img src={companyLogo} alt={companyName} className="w-8 h-8 object-contain" />
+              ) : (
+                <div className="relative">
+                  <Snowflake className="w-8 h-8 text-gold-400" />
+                  <div className="absolute inset-0 bg-gold-400/20 blur-lg rounded-full" />
+                </div>
+              )}
+              <h1 className="text-xl font-bold text-gold-400">{companyName}</h1>
             </Link>
           </div>
 
