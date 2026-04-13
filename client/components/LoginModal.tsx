@@ -178,12 +178,34 @@ export default function LoginModal({ onClose }: LoginModalProps) {
               variant="outline"
               onClick={handleGoogleSignIn}
               disabled={loading}
-              className="w-full justify-center gap-2 border-slate-300 bg-white hover:bg-slate-50"
+              className="w-full h-12 justify-center gap-3 border-slate-200 bg-gradient-to-r from-white via-slate-50 to-white text-slate-800 shadow-sm hover:shadow-md hover:border-slate-300 hover:from-slate-50 hover:to-slate-100 transition-all duration-200"
             >
-              {loading ? "Redirecting to Google..." : "Continue with Google"}
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white ring-1 ring-slate-200">
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+                  <path
+                    fill="#EA4335"
+                    d="M12 10.2v3.9h5.5c-.2 1.2-.9 2.2-1.9 2.9l3.1 2.4c1.8-1.7 2.8-4.1 2.8-6.9 0-.6-.1-1.1-.2-1.7H12z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 22c2.5 0 4.7-.8 6.3-2.3l-3.1-2.4c-.9.6-2 .9-3.2.9-2.5 0-4.7-1.7-5.4-4l-3.2 2.5C4.9 19.8 8.2 22 12 22z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M6.6 14.2c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2L3.4 7.7C2.8 8.9 2.5 10 2.5 12s.3 3.1.9 4.3l3.2-2.1z"
+                  />
+                  <path
+                    fill="#4285F4"
+                    d="M12 5.8c1.4 0 2.7.5 3.7 1.4l2.8-2.8C16.7 2.8 14.5 2 12 2 8.2 2 4.9 4.2 3.4 7.7l3.2 2.5c.7-2.3 2.9-4 5.4-4z"
+                  />
+                </svg>
+              </span>
+              <span className="font-semibold tracking-wide">
+                {loading ? "Redirecting to Google..." : "Sign in with Google"}
+              </span>
             </Button>
             <p className="text-xs text-center text-slate-500">
-              Google sign-in creates or opens a customer account automatically.
+              Secure Google login. A customer account will be created automatically if needed.
             </p>
           </div>
 

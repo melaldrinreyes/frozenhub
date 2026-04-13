@@ -177,6 +177,13 @@ export default function AdminUsers() {
     return !(raw === false || raw === 0 || String(raw).toLowerCase() === "false");
   };
 
+  const getStatusStyles = (user: any) =>
+    isUserActive(user)
+      ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+      : "bg-rose-100 text-rose-800 border border-rose-200";
+
+  const getStatusLabel = (user: any) => (isUserActive(user) ? "Enabled" : "Disabled");
+
   const handleOpenDialog = (user?: any) => {
     if (user) {
       setEditingId(user.id);
@@ -621,9 +628,12 @@ export default function AdminUsers() {
                             <div className="flex items-center justify-between gap-3">
                               <div>
                                 <p className="text-xs font-medium text-slate-500">Rider Status</p>
-                                <p className="text-sm font-semibold text-slate-900 mt-1">
-                                  {isUserActive(user) ? "Active" : "Disabled"}
-                                </p>
+                                <span
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold mt-1 ${getStatusStyles(user)}`}
+                                >
+                                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                                  {getStatusLabel(user)}
+                                </span>
                               </div>
                               <Button
                                 size="sm"
@@ -709,13 +719,10 @@ export default function AdminUsers() {
                       </td>
                       <td className="py-3 px-4">
                         <span
-                          className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-                            isUserActive(user)
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${getStatusStyles(user)}`}
                         >
-                          {isUserActive(user) ? "Active" : "Disabled"}
+                          <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                          {getStatusLabel(user)}
                         </span>
                       </td>
                       <td className="py-3 px-4">

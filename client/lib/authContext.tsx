@@ -6,6 +6,7 @@ import {
   ReactNode,
 } from "react";
 import { apiClient } from "./apiClient";
+import { toast } from "@/hooks/use-toast";
 
 export interface AuthUser {
   id: string;
@@ -57,8 +58,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const handleForcedLogout = () => {
+    const handleForcedLogout = (event: Event) => {
+      const customEvent = event as CustomEvent<{ reason?: string; status?: number }>;
+      const reason = customEvent.detail?.reason || "Your account was signed out.";
+
       setUser(null);
+
+      if (reason.toLowerCase().includes("disabled")) {
+        toast({
+          title: "Account Disabled",
+          description: "Na-disable na ang account mo. Please contact admin.",
+          variant: "destructive",
+        });
+      }
     };
 
     window.addEventListener("auth:forced-logout", handleForcedLogout as EventListener);
