@@ -634,20 +634,77 @@ export const handleUpdateInventoryMySQL: RequestHandler = async (req, res) => {
   updates.push("last_stock_check = NOW()");
 
   let connection;
+  let transactionStarted = false;
   try {
     connection = await getConnection();
+    await connection.beginTransaction();
+    transactionStarted = true;
+
+    const [currentRows] = await connection.query(
+      `SELECT id, product_id, branch_id, quantity
+       FROM inventory
+       WHERE id = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [id]
+    );
+    const currentInventory = (currentRows as any[])[0];
+    if (!currentInventory) {
+      await connection.rollback();
+      transactionStarted = false;
+      res.status(404).json({ error: "Inventory item not found" });
+      return;
+    }
 
     if (req.user?.role === "admin") {
       const passwordCheck = await verifyCurrentUserPassword(connection, req, adminPassword);
       if (!passwordCheck.valid) {
+        await connection.rollback();
+        transactionStarted = false;
         res.status(passwordCheck.status || 401).json(passwordCheck.body || { error: "Password verification failed" });
         return;
+      }
+    }
+
+    if (quantity !== undefined) {
+      const previousQty = Math.max(0, Math.floor(toNumber(currentInventory.quantity, 0)));
+      const targetQty = Math.max(0, Math.floor(toNumber(quantity, 0)));
+
+      if (targetQty < previousQty) {
+        const qtyToConsume = previousQty - targetQty;
+        await consumeInventoryFifo(connection, {
+          productId: String(currentInventory.product_id),
+          branchId: String(currentInventory.branch_id),
+          quantity: qtyToConsume,
+        });
+      } else if (targetQty > previousQty) {
+        const qtyToAdd = targetQty - previousQty;
+        const explicitUnitCost = body.unitCost ?? body.cost;
+
+        const [productRows] = await connection.query(
+          `SELECT cost FROM products WHERE id = ? LIMIT 1`,
+          [currentInventory.product_id]
+        );
+        const product = (productRows as any[])[0];
+        const unitCost = Math.max(0, toNumber(explicitUnitCost, toNumber(product?.cost, 0)));
+
+        await recordInboundInventoryBatch(connection, {
+          productId: String(currentInventory.product_id),
+          branchId: String(currentInventory.branch_id),
+          quantity: qtyToAdd,
+          unitCost,
+          sourceType: "manual",
+          sourceRef: `${currentInventory.product_id}:${currentInventory.branch_id}`,
+          sourceItemRef: null,
+        });
       }
     }
 
     values.push(id);
     const [result] = await connection.query(`UPDATE inventory SET ${updates.join(", ")} WHERE id = ?`, values);
     if (Number((result as any)?.affectedRows || 0) === 0) {
+      await connection.rollback();
+      transactionStarted = false;
       res.status(404).json({ error: "Inventory item not found" });
       return;
     }
@@ -676,8 +733,18 @@ export const handleUpdateInventoryMySQL: RequestHandler = async (req, res) => {
       ipAddress: req.ip || null,
       branchId: inventoryRecord?.branch_id || req.user?.branch_id || null,
     });
+
+    await connection.commit();
+    transactionStarted = false;
     res.json({ inventory: (rows as any[])[0] });
   } catch (error) {
+    if (connection && transactionStarted) {
+      try {
+        await connection.rollback();
+      } catch {
+        // ignore rollback failure
+      }
+    }
     console.error("MySQL update inventory error:", error);
     res.status(500).json({ error: "Failed to update inventory" });
   } finally {
