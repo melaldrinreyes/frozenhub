@@ -785,49 +785,75 @@ export default function Index() {
       )}
 
       {/* Categories Section */}
-      <section id="categories" className="py-10 sm:py-14 md:py-16 bg-gray-50 border-y border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-end justify-between gap-4 mb-6 sm:mb-8">
+      <section id="categories" className="py-12 sm:py-14 md:py-16 bg-gradient-to-b from-black via-gray-900 to-black border-y border-gold-500/20 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10 pointer-events-none">
+          <div className="absolute -top-20 -left-20 w-64 h-64 rounded-full bg-gold-400 blur-3xl" />
+          <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-gold-500 blur-3xl" />
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-7 sm:mb-9">
             <div>
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">Categories</h2>
-              <p className="text-sm sm:text-base text-gray-600 mt-1">Browse products by category</p>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold-500/15 border border-gold-500/30 mb-3">
+                <Grid className="w-4 h-4 text-gold-400" />
+                <span className="text-xs font-semibold tracking-wide text-gold-300 uppercase">Shop by Category</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white">Categories</h2>
+              <p className="text-sm sm:text-base text-gray-300 mt-1">Find products faster through curated groups</p>
             </div>
-            <Button
-              variant="outline"
-              className="hidden sm:flex border-gold-500 text-gold-600 hover:bg-gold-50"
-              onClick={() => navigate("/customer/shop")}
-            >
-              Browse All
-            </Button>
+
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-gray-300">
+                {categories.length} categorie{categories.length === 1 ? "" : "s"}
+              </div>
+              <Button
+                variant="outline"
+                className="border-gold-500/60 text-gold-300 hover:bg-gold-500/10 bg-black/40"
+                onClick={() => navigate("/customer/shop")}
+              >
+                Browse All
+              </Button>
+            </div>
           </div>
 
           {categories.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-              {categories.map((category: any) => {
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+              {categories.map((category: any, index: number) => {
                 const productCount = productCountByCategory[String(category.name)] || 0;
+                const categoryIcons = [Snowflake, Package, ShoppingCart, Star, Shield];
+                const CategoryIcon = categoryIcons[index % categoryIcons.length];
+
                 return (
                   <button
                     key={category.id}
                     type="button"
                     onClick={() => document.getElementById("products")?.scrollIntoView({ behavior: "smooth" })}
-                    className="group text-left p-4 sm:p-5 rounded-xl bg-white border border-gray-200 hover:border-gold-400 hover:shadow-md transition-all"
+                    className="group text-left p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-gold-400/70 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1"
                   >
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-gold-100 text-gold-700 flex items-center justify-center mb-3">
-                      <Grid className="w-5 h-5 sm:w-6 sm:h-6" />
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gold-500/15 text-gold-300 border border-gold-500/30 flex items-center justify-center">
+                        <CategoryIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                      </div>
+                      <span className="text-[11px] sm:text-xs px-2 py-1 rounded-full bg-black/40 border border-white/10 text-gray-300">
+                        {productCount} item{productCount === 1 ? "" : "s"}
+                      </span>
                     </div>
-                    <div className="font-semibold text-sm sm:text-base text-gray-900 line-clamp-2 group-hover:text-gold-700">
+
+                    <div className="font-semibold text-sm sm:text-base text-white line-clamp-2 group-hover:text-gold-300 transition-colors">
                       {category.name}
                     </div>
-                    <div className="text-xs sm:text-sm text-gray-500 mt-1">
-                      {productCount} product{productCount === 1 ? "" : "s"}
+
+                    <div className="mt-3 text-xs sm:text-sm text-gold-300/90 inline-flex items-center gap-1">
+                      View products
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </div>
                   </button>
                 );
               })}
             </div>
           ) : (
-            <div className="text-center py-8 sm:py-10 bg-white border border-dashed border-gray-300 rounded-xl">
-              <p className="text-sm sm:text-base text-gray-600">No categories available yet.</p>
+            <div className="text-center py-8 sm:py-10 bg-white/5 border border-dashed border-white/20 rounded-xl">
+              <p className="text-sm sm:text-base text-gray-300">No categories available yet.</p>
             </div>
           )}
         </div>
