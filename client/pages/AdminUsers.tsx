@@ -179,8 +179,8 @@ export default function AdminUsers() {
 
   const getStatusStyles = (user: any) =>
     isUserActive(user)
-      ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-      : "bg-rose-100 text-rose-800 border border-rose-200";
+      ? "bg-emerald-600 text-white border border-emerald-700 shadow-sm"
+      : "bg-rose-600 text-white border border-rose-700 shadow-sm";
 
   const getStatusLabel = (user: any) => (isUserActive(user) ? "Enabled" : "Disabled");
 
@@ -636,7 +636,7 @@ export default function AdminUsers() {
                                 <span
                                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold mt-1 ${getStatusStyles(user)}`}
                                 >
-                                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                                  <span className="h-1.5 w-1.5 rounded-full bg-white/90" />
                                   {getStatusLabel(user)}
                                 </span>
                               </div>
@@ -731,7 +731,7 @@ export default function AdminUsers() {
                         <span
                           className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${getStatusStyles(user)}`}
                         >
-                          <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-white/90" />
                           {getStatusLabel(user)}
                         </span>
                       </td>
