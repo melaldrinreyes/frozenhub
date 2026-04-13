@@ -622,6 +622,32 @@ async function ensureSchema(connection: PgConnection) {
       cost NUMERIC(10, 2) NOT NULL DEFAULT 0,
       total NUMERIC(10, 2) NOT NULL DEFAULT 0
     )`,
+    `CREATE TABLE IF NOT EXISTS inventory_batches (
+      id TEXT PRIMARY KEY,
+      product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+      source_type TEXT NOT NULL CHECK (source_type IN ('purchase', 'manual', 'transfer_in', 'seed')),
+      source_ref TEXT NULL,
+      source_item_ref TEXT NULL,
+      quantity_received INTEGER NOT NULL DEFAULT 0,
+      quantity_remaining INTEGER NOT NULL DEFAULT 0,
+      unit_cost NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK (quantity_received >= 0),
+      CHECK (quantity_remaining >= 0),
+      CHECK (quantity_remaining <= quantity_received)
+    )`,
+    `CREATE TABLE IF NOT EXISTS sale_item_inventory_batches (
+      id TEXT PRIMARY KEY,
+      sale_item_id TEXT NOT NULL REFERENCES sale_items(id) ON DELETE CASCADE,
+      batch_id TEXT NOT NULL REFERENCES inventory_batches(id) ON DELETE RESTRICT,
+      quantity INTEGER NOT NULL DEFAULT 0,
+      unit_cost NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      total_cost NUMERIC(10, 2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK (quantity > 0)
+    )`,
   ]);
 
   await executeStatements(connection, [
@@ -680,6 +706,10 @@ async function ensureSchema(connection: PgConnection) {
     `CREATE INDEX IF NOT EXISTS idx_purchases_supplier ON purchases(supplier_id)`,
     `CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase ON purchase_items(purchase_id)`,
     `CREATE INDEX IF NOT EXISTS idx_purchase_items_product ON purchase_items(product_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_inventory_batches_product_branch ON inventory_batches(product_id, branch_id, received_at, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_inventory_batches_source_ref ON inventory_batches(source_type, source_ref)`,
+    `CREATE INDEX IF NOT EXISTS idx_sale_item_inventory_batches_sale_item ON sale_item_inventory_batches(sale_item_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_sale_item_inventory_batches_batch ON sale_item_inventory_batches(batch_id)`,
   ]);
 }
 

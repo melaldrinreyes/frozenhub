@@ -2,6 +2,11 @@ import { RequestHandler } from "express";
 import bcrypt from "bcryptjs";
 import { getConnection } from "../db";
 import { logActivity } from "./activity-logs";
+import {
+  consumeInventoryFifo,
+  deleteInboundBatchesBySource,
+  recordInboundInventoryBatch,
+} from "../utils/inventory-fifo";
 import fs from "fs";
 import path from "path";
 
@@ -523,6 +528,7 @@ export const handleAddInventoryMySQL: RequestHandler = async (req, res) => {
   const branchId = body.branchId ?? body.branch_id;
   const quantity = body.quantity;
   const reorderLevel = body.reorderLevel ?? body.reorder_level;
+  const explicitUnitCost = body.unitCost ?? body.cost;
 
   if (!productId || !branchId) {
     res.status(400).json({ error: "productId and branchId are required" });
@@ -532,6 +538,15 @@ export const handleAddInventoryMySQL: RequestHandler = async (req, res) => {
   let connection;
   try {
     connection = await getConnection();
+    const quantityToAdd = Math.max(0, Math.floor(toNumber(quantity, 0)));
+
+    const [productRows] = await connection.query(
+      `SELECT cost FROM products WHERE id = ? LIMIT 1`,
+      [productId]
+    );
+    const product = (productRows as any[])[0];
+    const unitCost = Math.max(0, toNumber(explicitUnitCost, toNumber(product?.cost, 0)));
+
     const id = randomId("inv");
     await connection.query(
       `INSERT INTO inventory (id, product_id, branch_id, quantity, reorder_level, last_stock_check)
@@ -540,8 +555,18 @@ export const handleAddInventoryMySQL: RequestHandler = async (req, res) => {
          quantity = inventory.quantity + EXCLUDED.quantity,
          reorder_level = EXCLUDED.reorder_level,
          last_stock_check = NOW()`,
-      [id, productId, branchId, Math.max(0, Math.floor(toNumber(quantity, 0))), Math.max(0, Math.floor(toNumber(reorderLevel, 50)))]
+      [id, productId, branchId, quantityToAdd, Math.max(0, Math.floor(toNumber(reorderLevel, 50)))]
     );
+
+    await recordInboundInventoryBatch(connection, {
+      productId: String(productId),
+      branchId: String(branchId),
+      quantity: quantityToAdd,
+      unitCost,
+      sourceType: "manual",
+      sourceRef: `${productId}:${branchId}`,
+      sourceItemRef: null,
+    });
 
     const [rows] = await connection.query(
       `SELECT i.*, p.name as product_name, p.sku, p.barcode, b.name as branch_name
@@ -781,6 +806,14 @@ export const handleStockTransferMySQL: RequestHandler = async (req, res) => {
       throw new Error("Insufficient stock in source branch");
     }
 
+    const fifoAllocations = await consumeInventoryFifo(connection, {
+      productId: String(productId),
+      branchId: String(fromBranchId),
+      quantity: transferQty,
+    });
+
+    const logId = randomId("stl");
+
     await connection.query(
       `UPDATE inventory SET quantity = quantity - ?, last_stock_check = NOW() WHERE id = ?`,
       [transferQty, fromInv.id]
@@ -805,7 +838,18 @@ export const handleStockTransferMySQL: RequestHandler = async (req, res) => {
       );
     }
 
-    const logId = randomId("stl");
+    for (const allocation of fifoAllocations) {
+      await recordInboundInventoryBatch(connection, {
+        productId: String(productId),
+        branchId: String(toBranchId),
+        quantity: allocation.quantity,
+        unitCost: allocation.unitCost,
+        sourceType: "transfer_in",
+        sourceRef: logId,
+        sourceItemRef: allocation.batchId,
+      });
+    }
+
     await connection.query(
       `INSERT INTO stock_transfer_logs (
         id, transfer_date, product_id, product_name, from_branch_id, from_branch_name,
@@ -2424,10 +2468,11 @@ export const handleCreatePurchaseMySQL: RequestHandler = async (req, res) => {
       const lineTotal = Number((quantity * unitCost).toFixed(2));
       totalAmount += lineTotal;
 
+      const purchaseItemId = randomId("pi");
       await connection.query(
         `INSERT INTO purchase_items (id, purchase_id, product_id, quantity, cost, total)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [randomId("pi"), purchaseId, productId, quantity, unitCost, lineTotal]
+        [purchaseItemId, purchaseId, productId, quantity, unitCost, lineTotal]
       );
 
       await connection.query(
@@ -2438,6 +2483,17 @@ export const handleCreatePurchaseMySQL: RequestHandler = async (req, res) => {
            last_stock_check = NOW()`,
         [randomId("inv"), productId, branchId, quantity]
       );
+
+      await recordInboundInventoryBatch(connection, {
+        productId: String(productId),
+        branchId: String(branchId),
+        quantity,
+        unitCost,
+        sourceType: "purchase",
+        sourceRef: purchaseId,
+        sourceItemRef: purchaseItemId,
+        receivedAt: purchaseDate || null,
+      });
     }
 
     await connection.query(
@@ -2519,6 +2575,8 @@ export const handleUpdatePurchaseMySQL: RequestHandler = async (req, res) => {
         );
       }
 
+      await deleteInboundBatchesBySource(connection, "purchase", id);
+
       await connection.query("DELETE FROM purchase_items WHERE purchase_id = ?", [id]);
 
       totalAmount = 0;
@@ -2531,10 +2589,11 @@ export const handleUpdatePurchaseMySQL: RequestHandler = async (req, res) => {
         const lineTotal = Number((quantity * unitCost).toFixed(2));
         totalAmount += lineTotal;
 
+        const purchaseItemId = randomId("pi");
         await connection.query(
           `INSERT INTO purchase_items (id, purchase_id, product_id, quantity, cost, total)
            VALUES (?, ?, ?, ?, ?, ?)`,
-          [randomId("pi"), id, productId, quantity, unitCost, lineTotal]
+          [purchaseItemId, id, productId, quantity, unitCost, lineTotal]
         );
 
         await connection.query(
@@ -2545,6 +2604,17 @@ export const handleUpdatePurchaseMySQL: RequestHandler = async (req, res) => {
              last_stock_check = NOW()`,
           [randomId("inv"), productId, branchId || existing.branch_id, quantity]
         );
+
+        await recordInboundInventoryBatch(connection, {
+          productId: String(productId),
+          branchId: String(branchId || existing.branch_id),
+          quantity,
+          unitCost,
+          sourceType: "purchase",
+          sourceRef: id,
+          sourceItemRef: purchaseItemId,
+          receivedAt: purchaseDate || existing.purchase_date || null,
+        });
       }
     }
 
@@ -2626,6 +2696,8 @@ export const handleDeletePurchaseMySQL: RequestHandler = async (req, res) => {
         [Number(item.quantity || 0), item.product_id, purchase.branch_id]
       );
     }
+
+    await deleteInboundBatchesBySource(connection, "purchase", id);
 
     await connection.query("DELETE FROM purchases WHERE id = ?", [id]);
     await connection.commit();

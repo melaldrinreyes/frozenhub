@@ -4,6 +4,7 @@ import { getConnection } from "../db";
 import { AuthUser } from "../middleware/auth";
 import { generateToken } from "../middleware/jwt";
 import { logActivity } from "./activity-logs";
+import { consumeInventoryFifo, recordSaleItemBatchAllocations } from "../utils/inventory-fifo";
 import fs from "fs";
 import path from "path";
 
@@ -1795,6 +1796,13 @@ export const handleCreateSaleMySQL: RequestHandler = async (req, res) => {
       total: number;
       subtotal: number;
       discount_amount: number;
+      fifoAllocations: Array<{
+        batchId: string;
+        quantity: number;
+        unitCost: number;
+        totalCost: number;
+        receivedAt: string;
+      }>;
     }> = [];
 
     let computedSubtotal = 0;
@@ -1839,6 +1847,11 @@ export const handleCreateSaleMySQL: RequestHandler = async (req, res) => {
         total: lineTotal,
         subtotal: lineTotal,
         discount_amount: 0,
+        fifoAllocations: await consumeInventoryFifo(connection, {
+          productId: String(productId),
+          branchId: String(branchId),
+          quantity,
+        }),
       });
 
       computedSubtotal += lineTotal;
@@ -1893,6 +1906,8 @@ export const handleCreateSaleMySQL: RequestHandler = async (req, res) => {
           item.discount_amount,
         ]
       );
+
+      await recordSaleItemBatchAllocations(connection, item.id, item.fifoAllocations);
     }
 
     await connection.commit();

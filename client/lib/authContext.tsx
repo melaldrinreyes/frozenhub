@@ -7,7 +7,6 @@ import {
   ReactNode,
 } from "react";
 import { apiClient } from "./apiClient";
-import {
 
 export interface AuthUser {
   id: string;

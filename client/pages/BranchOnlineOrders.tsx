@@ -294,19 +294,19 @@ export default function BranchOnlineOrders() {
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-orange-900">
                     {newPendingOrders.length} New Order{newPendingOrders.length > 1 ? 's' : ''}!
-                                  {riders.length === 0 && (
+                  </h3>
                   <Badge className="bg-orange-500 text-white">NEW</Badge>
-                                      No riders assigned to this branch
+                </div>
                 <p className="text-sm text-orange-700 mt-0.5">
                   You have {newPendingOrders.length} new pending order{newPendingOrders.length > 1 ? 's' : ''} waiting for confirmation
-                                  {riders.map((rider: RiderUser) => {
-                                    const isBusy = busyRiderIds.has(rider.id) && rider.id !== order.assigned_rider_id;
-                                    return (
-                                      <SelectItem key={rider.id} value={rider.id} disabled={isBusy}>
-                                        {isBusy ? `${rider.name} (Busy)` : rider.name}
-                                      </SelectItem>
-                                    );
-                                  })}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setStatusFilter("pending")}
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                View Orders
               </Button>
             </div>
           </div>
@@ -607,6 +607,7 @@ export default function BranchOnlineOrders() {
                                       </SelectItem>
                                     );
                                   })}
+                                </SelectContent>
                               </Select>
 
                               <Button
@@ -662,6 +663,7 @@ export default function BranchOnlineOrders() {
                                         </SelectItem>
                                       );
                                     })}
+                                </SelectContent>
                               </Select>
 
                               <Button
