@@ -506,6 +506,11 @@ export default function Index() {
   });
 
   const categories = categoriesData?.categories?.filter((c: any) => c.active) || [];
+  const productCountByCategory = uniqueProducts.reduce((acc: Record<string, number>, product: any) => {
+    const key = String(product.category || "Uncategorized");
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
 
   // Fetch active promos for promotional banner
   const { data: activePromosData } = useQuery({
@@ -778,6 +783,55 @@ export default function Index() {
           </div>
         </section>
       )}
+
+      {/* Categories Section */}
+      <section id="categories" className="py-10 sm:py-14 md:py-16 bg-gray-50 border-y border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-end justify-between gap-4 mb-6 sm:mb-8">
+            <div>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">Categories</h2>
+              <p className="text-sm sm:text-base text-gray-600 mt-1">Browse products by category</p>
+            </div>
+            <Button
+              variant="outline"
+              className="hidden sm:flex border-gold-500 text-gold-600 hover:bg-gold-50"
+              onClick={() => navigate("/customer/shop")}
+            >
+              Browse All
+            </Button>
+          </div>
+
+          {categories.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+              {categories.map((category: any) => {
+                const productCount = productCountByCategory[String(category.name)] || 0;
+                return (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => document.getElementById("products")?.scrollIntoView({ behavior: "smooth" })}
+                    className="group text-left p-4 sm:p-5 rounded-xl bg-white border border-gray-200 hover:border-gold-400 hover:shadow-md transition-all"
+                  >
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-gold-100 text-gold-700 flex items-center justify-center mb-3">
+                      <Grid className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </div>
+                    <div className="font-semibold text-sm sm:text-base text-gray-900 line-clamp-2 group-hover:text-gold-700">
+                      {category.name}
+                    </div>
+                    <div className="text-xs sm:text-sm text-gray-500 mt-1">
+                      {productCount} product{productCount === 1 ? "" : "s"}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-8 sm:py-10 bg-white border border-dashed border-gray-300 rounded-xl">
+              <p className="text-sm sm:text-base text-gray-600">No categories available yet.</p>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Featured Products Section */}
       <section 
