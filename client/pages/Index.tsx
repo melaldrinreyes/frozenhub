@@ -817,7 +817,7 @@ export default function Index() {
           </div>
 
           {categories.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
               {categories.map((category: any, index: number) => {
                 const productCount = productCountByCategory[String(category.name)] || 0;
                 const categoryIcons = [Snowflake, Package, ShoppingCart, Star, Shield];
@@ -828,22 +828,22 @@ export default function Index() {
                     key={category.id}
                     type="button"
                     onClick={() => document.getElementById("products")?.scrollIntoView({ behavior: "smooth" })}
-                    className="group text-left p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-gold-400/70 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1"
+                    className="group text-left p-3.5 sm:p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-gold-400/70 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1 min-h-[150px] sm:min-h-[172px] flex flex-col"
                   >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gold-500/15 text-gold-300 border border-gold-500/30 flex items-center justify-center">
-                        <CategoryIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                    <div className="flex items-start justify-between mb-3 sm:mb-4">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gold-500/15 text-gold-300 border border-gold-500/30 flex items-center justify-center">
+                        <CategoryIcon className="w-4.5 h-4.5 sm:w-6 sm:h-6" />
                       </div>
                       <span className="text-[11px] sm:text-xs px-2 py-1 rounded-full bg-black/40 border border-white/10 text-gray-300">
                         {productCount} item{productCount === 1 ? "" : "s"}
                       </span>
                     </div>
 
-                    <div className="font-semibold text-sm sm:text-base text-white line-clamp-2 group-hover:text-gold-300 transition-colors">
+                    <div className="font-semibold text-[13px] sm:text-base text-white line-clamp-2 group-hover:text-gold-300 transition-colors">
                       {category.name}
                     </div>
 
-                    <div className="mt-3 text-xs sm:text-sm text-gold-300/90 inline-flex items-center gap-1">
+                    <div className="mt-auto pt-3 text-[11px] sm:text-sm text-gold-300/90 inline-flex items-center gap-1">
                       View products
                       <ChevronRight className="w-3.5 h-3.5" />
                     </div>
