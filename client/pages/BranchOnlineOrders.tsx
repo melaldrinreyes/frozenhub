@@ -55,6 +55,7 @@ interface RiderUser {
   id: string;
   name: string;
   branch_id?: string | null;
+  active?: boolean;
 }
 
 interface OrderItem {
@@ -131,10 +132,20 @@ export default function BranchOnlineOrders() {
     queryKey: ["branch-riders", user?.branch_id],
     queryFn: async () => {
       const result = await apiClient.getUsers({ role: "rider", branchId: user?.branch_id });
-      return (result.users || []).map((r: any) => ({ id: r.id, name: r.name, branch_id: r.branch_id }));
+      return (result.users || []).map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        branch_id: r.branch_id,
+        active: r.active !== false,
+      }));
     },
     enabled: !!user?.branch_id,
   });
+
+  const activeRiders = useMemo(
+    () => riders.filter((rider: RiderUser) => rider.active !== false),
+    [riders],
+  );
 
   // Filter orders by status
   const filteredOrders = useMemo(() => {
@@ -214,6 +225,30 @@ export default function BranchOnlineOrders() {
 
   const handleStatusChange = (orderId: string, newStatus: string) => {
     updateStatusMutation.mutate({ orderId, status: newStatus });
+  };
+
+  const handleAssignRider = (order: OnlineOrder) => {
+    const riderId = selectedRiders[order.id] || order.assigned_rider_id;
+    if (!riderId) {
+      toast({
+        title: "Select rider",
+        description: "Choose an available rider first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const riderIsActive = activeRiders.some((rider: RiderUser) => rider.id === riderId);
+    if (!riderIsActive) {
+      toast({
+        title: "Rider unavailable",
+        description: "This rider is disabled. Please choose an active rider.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    assignRiderMutation.mutate({ orderId: order.id, riderId });
   };
 
   const getStatusBadge = (status: string) => {
@@ -580,12 +615,12 @@ export default function BranchOnlineOrders() {
                                   <SelectValue placeholder="Select rider" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {riders.length === 0 && (
+                                  {activeRiders.length === 0 && (
                                     <SelectItem value="__no_riders" disabled>
-                                      No riders assigned to this branch
+                                      No active riders available in this branch
                                     </SelectItem>
                                   )}
-                                  {riders.map((rider: RiderUser) => {
+                                  {activeRiders.map((rider: RiderUser) => {
                                     const isBusy = busyRiderIds.has(rider.id) && rider.id !== order.assigned_rider_id;
                                     return (
                                       <SelectItem key={rider.id} value={rider.id} disabled={isBusy}>
@@ -599,18 +634,7 @@ export default function BranchOnlineOrders() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => {
-                                  const riderId = selectedRiders[order.id] || order.assigned_rider_id;
-                                  if (!riderId) {
-                                    toast({
-                                      title: "Select rider",
-                                      description: "Choose an available rider first.",
-                                      variant: "destructive",
-                                    });
-                                    return;
-                                  }
-                                  assignRiderMutation.mutate({ orderId: order.id, riderId });
-                                }}
+                                onClick={() => handleAssignRider(order)}
                                 disabled={assignRiderMutation.isPending}
                               >
                                 Assign Rider
@@ -647,12 +671,12 @@ export default function BranchOnlineOrders() {
                                   <SelectValue placeholder="Select rider" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {riders.length === 0 && (
+                                  {activeRiders.length === 0 && (
                                     <SelectItem value="__no_riders" disabled>
-                                      No riders assigned to this branch
+                                      No active riders available in this branch
                                     </SelectItem>
                                   )}
-                                  {riders.map((rider: RiderUser) => {
+                                  {activeRiders.map((rider: RiderUser) => {
                                     const isBusy = busyRiderIds.has(rider.id) && rider.id !== order.assigned_rider_id;
                                     return (
                                       <SelectItem key={rider.id} value={rider.id} disabled={isBusy}>
@@ -666,18 +690,7 @@ export default function BranchOnlineOrders() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => {
-                                  const riderId = selectedRiders[order.id] || order.assigned_rider_id;
-                                  if (!riderId) {
-                                    toast({
-                                      title: "Select rider",
-                                      description: "Choose an available rider first.",
-                                      variant: "destructive",
-                                    });
-                                    return;
-                                  }
-                                  assignRiderMutation.mutate({ orderId: order.id, riderId });
-                                }}
+                                onClick={() => handleAssignRider(order)}
                                 disabled={assignRiderMutation.isPending}
                               >
                                 {order.assigned_rider_id ? "Reassign" : "Assign"}

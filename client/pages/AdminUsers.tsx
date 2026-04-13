@@ -40,9 +40,12 @@ import {
   Phone,
   Building,
   Calendar,
+  UserX,
+  UserCheck,
 } from "lucide-react";
 import { filterBySearch, paginateItems } from "@/lib/dataManager";
 import { apiClient } from "@/lib/apiClient";
+import { useToast } from "@/hooks/use-toast";
 
 const ROLES = [
   { value: "admin", label: "Administrator" },
@@ -53,6 +56,7 @@ const ROLES = [
 
 export default function AdminUsers() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -71,6 +75,11 @@ export default function AdminUsers() {
     | {
         type: "delete-user";
         user: any;
+      }
+    | {
+        type: "toggle-rider-status";
+        user: any;
+        nextActive: boolean;
       }
     | null
   >(null);
@@ -132,6 +141,23 @@ export default function AdminUsers() {
     },
     onError: (error: any) => {
       alert(error.message || "Failed to delete user");
+    },
+  });
+
+  const toggleRiderStatusMutation = useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
+      apiClient.updateUser(id, { active }),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      toast({
+        title: variables.active ? "Rider enabled" : "Rider disabled",
+        description: variables.active
+          ? "The rider can sign in and receive deliveries again."
+          : "The rider account is temporarily disabled.",
+      });
+    },
+    onError: (error: any) => {
+      alert(error.message || "Failed to update rider status");
     },
   });
 
@@ -223,10 +249,28 @@ export default function AdminUsers() {
     setConfirmDialog({ type: "delete-user", user: targetUser });
   };
 
+  const handleToggleRiderStatus = (user: any) => {
+    const isActive = user.active !== false;
+    setConfirmDialog({
+      type: "toggle-rider-status",
+      user,
+      nextActive: !isActive,
+    });
+  };
+
   const handleConfirmDialogAction = () => {
     if (!confirmDialog) return;
 
-    deleteUserMutation.mutate(confirmDialog.user.id);
+    if (confirmDialog.type === "delete-user") {
+      deleteUserMutation.mutate(confirmDialog.user.id);
+    }
+
+    if (confirmDialog.type === "toggle-rider-status") {
+      toggleRiderStatusMutation.mutate({
+        id: confirmDialog.user.id,
+        active: confirmDialog.nextActive,
+      });
+    }
 
     setConfirmDialog(null);
   };
@@ -528,6 +572,26 @@ export default function AdminUsers() {
                           </div>
                         </div>
                         <div className="flex gap-1 ml-2">
+                          {user.role === "rider" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleToggleRiderStatus(user)}
+                              disabled={toggleRiderStatusMutation.isPending}
+                              className={`h-9 w-9 p-0 ${
+                                user.active === false
+                                  ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                  : "text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                              }`}
+                              title={user.active === false ? "Enable rider" : "Temporarily disable rider"}
+                            >
+                              {user.active === false ? (
+                                <UserCheck className="w-4 h-4" />
+                              ) : (
+                                <UserX className="w-4 h-4" />
+                              )}
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
@@ -605,6 +669,9 @@ export default function AdminUsers() {
                       Role
                     </th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">
+                      Status
+                    </th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">
                       Branch
                     </th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">
@@ -631,6 +698,17 @@ export default function AdminUsers() {
                           {getRoleLabel(user.role)}
                         </span>
                       </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                            user.active === false
+                              ? "bg-red-100 text-red-800"
+                              : "bg-emerald-100 text-emerald-800"
+                          }`}
+                        >
+                          {user.active === false ? "Disabled" : "Active"}
+                        </span>
+                      </td>
                       <td className="py-3 px-4 text-slate-600">
                         {user.branch_id ? (branchMap[user.branch_id] || user.branch_id) : "-"}
                       </td>
@@ -639,6 +717,26 @@ export default function AdminUsers() {
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex gap-2">
+                          {user.role === "rider" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleToggleRiderStatus(user)}
+                              disabled={toggleRiderStatusMutation.isPending}
+                              className={
+                                user.active === false
+                                  ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-8 w-8 p-0"
+                                  : "text-amber-600 hover:text-amber-700 hover:bg-amber-50 h-8 w-8 p-0"
+                              }
+                              title={user.active === false ? "Enable rider" : "Temporarily disable rider"}
+                            >
+                              {user.active === false ? (
+                                <UserCheck className="w-4 h-4" />
+                              ) : (
+                                <UserX className="w-4 h-4" />
+                              )}
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
@@ -705,18 +803,38 @@ export default function AdminUsers() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete User</AlertDialogTitle>
+            <AlertDialogTitle>
+              {confirmDialog?.type === "toggle-rider-status"
+                ? confirmDialog.nextActive
+                  ? "Enable Rider Account"
+                  : "Temporarily Disable Rider Account"
+                : "Delete User"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {`Are you sure you want to delete user ${confirmDialog?.user?.name}? This action cannot be undone.`}
+              {confirmDialog?.type === "toggle-rider-status"
+                ? confirmDialog.nextActive
+                  ? `Are you sure you want to enable ${confirmDialog?.user?.name}? The rider can sign in and accept deliveries again.`
+                  : `Are you sure you want to temporarily disable ${confirmDialog?.user?.name}? The rider will not be able to sign in until enabled again.`
+                : `Are you sure you want to delete user ${confirmDialog?.user?.name}? This action cannot be undone.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDialogAction}
-              className="bg-red-600 hover:bg-red-700"
+              className={
+                confirmDialog?.type === "toggle-rider-status"
+                  ? confirmDialog?.nextActive
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-amber-600 hover:bg-amber-700"
+                  : "bg-red-600 hover:bg-red-700"
+              }
             >
-              Delete User
+              {confirmDialog?.type === "toggle-rider-status"
+                ? confirmDialog.nextActive
+                  ? "Enable Rider"
+                  : "Disable Rider"
+                : "Delete User"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

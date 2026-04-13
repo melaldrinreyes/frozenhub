@@ -182,7 +182,8 @@ async function isRiderAssignmentDisabled(connection: any, riderId: string): Prom
     if ((tableRows as any[]).length === 0) return false;
 
     const [rows] = await connection.query(
-      `SELECT MAX(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as has_active
+      `SELECT COUNT(*) as total_assignments,
+              SUM(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as active_assignments
        FROM rider_branch_assignments
        WHERE rider_id = ?`,
       [riderId]
@@ -191,7 +192,13 @@ async function isRiderAssignmentDisabled(connection: any, riderId: string): Prom
     const record = (rows as any[])[0];
     if (!record) return false;
 
-    return Number(record.has_active || 0) === 0;
+    const totalAssignments = Number(record.total_assignments || 0);
+    const activeAssignments = Number(record.active_assignments || 0);
+
+    // Riders with no assignment history should not be treated as disabled.
+    if (totalAssignments === 0) return false;
+
+    return activeAssignments === 0;
   } catch {
     return false;
   }
