@@ -462,7 +462,10 @@ export default function Index() {
     if (!target) return;
 
     requestAnimationFrame(() => {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      const headerOffset = 88;
+      const targetTop = target.getBoundingClientRect().top + window.pageYOffset - headerOffset;
+      window.scrollTo({ top: targetTop, behavior: "smooth" });
+      setActiveNavItem(targetId);
     });
   }, [location.hash]);
 
@@ -525,6 +528,25 @@ export default function Index() {
     promo.discount_value && promo.discount_value > 0
   );
 
+  const scrollToSection = useCallback((sectionId: string) => {
+    const target = document.getElementById(sectionId);
+    if (!target) return;
+
+    const headerOffset = 88;
+    const targetTop = target.getBoundingClientRect().top + window.pageYOffset - headerOffset;
+    window.scrollTo({ top: targetTop, behavior: "smooth" });
+    setActiveNavItem(sectionId);
+  }, []);
+
+  const sectionLinks = [
+    { id: "home", label: "Home" },
+    ...(promoEnabled ? [{ id: "promo-banner", label: "Promos" }] : []),
+    { id: "categories", label: "Categories" },
+    { id: "products", label: "Products" },
+    { id: "why-choose-us", label: "Why Us" },
+    { id: "about", label: "About" },
+  ];
+
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
@@ -544,16 +566,21 @@ export default function Index() {
             </div>
 
             {/* Navigation */}
-            <nav className="hidden md:flex items-center gap-6">
-              <a href="#products" className="text-gray-300 hover:text-gold-400 transition-colors text-sm font-medium">
-                Products
-              </a>
-              <a href="#categories" className="text-gray-300 hover:text-gold-400 transition-colors text-sm font-medium">
-                Categories
-              </a>
-              <a href="#about" className="text-gray-300 hover:text-gold-400 transition-colors text-sm font-medium">
-                About
-              </a>
+            <nav className="hidden lg:flex items-center gap-2 xl:gap-3">
+              {sectionLinks.map((section) => (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => scrollToSection(section.id)}
+                  className={`px-2.5 py-1.5 rounded-full transition-colors text-xs xl:text-sm font-medium ${
+                    activeNavItem === section.id
+                      ? "bg-gold-500/15 text-gold-300"
+                      : "text-gray-300 hover:text-gold-300 hover:bg-white/5"
+                  }`}
+                >
+                  {section.label}
+                </button>
+              ))}
             </nav>
 
             {/* Actions */}
@@ -572,8 +599,9 @@ export default function Index() {
 
       {/* Hero Section */}
       <section 
+        id="home"
         ref={heroSectionRef}
-        className="relative py-12 sm:py-16 md:py-20 overflow-hidden"
+        className="relative py-12 sm:py-16 md:py-20 overflow-hidden scroll-mt-24"
       >
         {!heroBanner && (
           <div className="absolute inset-0 bg-gradient-to-b from-black via-gray-900 to-black" />
@@ -592,7 +620,7 @@ export default function Index() {
                 size="lg"
                 className="bg-gold-500 hover:bg-gold-600 text-black font-semibold w-full sm:w-auto"
                 onClick={() => {
-                  document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' });
+                  scrollToSection("products");
                 }}
               >
                 Shop Now
@@ -615,7 +643,7 @@ export default function Index() {
         <section 
           ref={promoSectionRef}
           id="promo-banner" 
-          className="py-8 sm:py-12 md:py-16 relative overflow-hidden"
+          className="py-8 sm:py-12 md:py-16 relative overflow-hidden scroll-mt-24"
         >
           {/* Decorative Elements */}
           <div className="absolute inset-0 opacity-10">
@@ -682,7 +710,7 @@ export default function Index() {
                             size="lg"
                             className="bg-black hover:bg-gray-900 text-white font-semibold text-base sm:text-lg px-6 py-5 sm:px-8 sm:py-6 shadow-xl hover:shadow-2xl transition-all w-full sm:w-auto"
                             onClick={() => {
-                              document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' });
+                              scrollToSection("products");
                             }}
                           >
                             Shop Promo
@@ -694,7 +722,7 @@ export default function Index() {
                               variant="outline"
                               className="border-white/30 text-white hover:bg-white/10 bg-black/20 backdrop-blur-sm font-semibold text-base sm:text-lg px-6 py-5 sm:px-8 sm:py-6 w-full sm:w-auto"
                               onClick={() => {
-                                document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' });
+                                scrollToSection("products");
                               }}
                             >
                               View All {activePromos.length} Promos
@@ -730,7 +758,7 @@ export default function Index() {
                           if (promoButton1Link.startsWith('http')) {
                             window.open(promoButton1Link, '_blank');
                           } else if (promoButton1Link.startsWith('#')) {
-                            document.getElementById(promoButton1Link.slice(1))?.scrollIntoView({ behavior: 'smooth' });
+                            scrollToSection(promoButton1Link.slice(1));
                           } else {
                             window.location.href = promoButton1Link;
                           }
@@ -749,7 +777,7 @@ export default function Index() {
                           if (promoButton2Link.startsWith('http')) {
                             window.open(promoButton2Link, '_blank');
                           } else if (promoButton2Link.startsWith('#')) {
-                            document.getElementById(promoButton2Link.slice(1))?.scrollIntoView({ behavior: 'smooth' });
+                            scrollToSection(promoButton2Link.slice(1));
                           } else {
                             window.location.href = promoButton2Link;
                           }
@@ -785,7 +813,7 @@ export default function Index() {
       )}
 
       {/* Categories Section */}
-      <section id="categories" className="py-12 sm:py-14 md:py-16 bg-gradient-to-b from-black via-gray-900 to-black border-y border-gold-500/20 relative overflow-hidden">
+      <section id="categories" className="py-12 sm:py-14 md:py-16 bg-gradient-to-b from-black via-gray-900 to-black border-y border-gold-500/20 relative overflow-hidden scroll-mt-24">
         <div className="absolute inset-0 opacity-10 pointer-events-none">
           <div className="absolute -top-20 -left-20 w-64 h-64 rounded-full bg-gold-400 blur-3xl" />
           <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-gold-500 blur-3xl" />
@@ -827,7 +855,7 @@ export default function Index() {
                   <button
                     key={category.id}
                     type="button"
-                    onClick={() => document.getElementById("products")?.scrollIntoView({ behavior: "smooth" })}
+                    onClick={() => scrollToSection("products")}
                     className="group text-left p-3.5 sm:p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-gold-400/70 hover:bg-white/10 transition-all duration-300 hover:-translate-y-1 min-h-[150px] sm:min-h-[172px] flex flex-col"
                   >
                     <div className="flex items-start justify-between mb-3 sm:mb-4">
@@ -863,7 +891,7 @@ export default function Index() {
       <section 
         ref={featuredSectionRef}
         id="products" 
-        className="py-12 sm:py-16 md:py-20 relative"
+        className="py-12 sm:py-16 md:py-20 relative scroll-mt-24"
       >
         {/* Optional overlay for image backgrounds to improve text readability */}
         {featuredBgType === "image" && featuredBgImage && (
@@ -1052,7 +1080,7 @@ export default function Index() {
       </section>
 
       {/* Why Choose Us Section */}
-      <section id="why-choose-us" className="py-12 sm:py-16 bg-white border-t border-gray-200">
+      <section id="why-choose-us" className="py-12 sm:py-16 bg-white border-t border-gray-200 scroll-mt-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-8 sm:mb-12">
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
@@ -1101,7 +1129,7 @@ export default function Index() {
       </section>
 
       {/* About Us Section */}
-      <section id="about" className="py-12 sm:py-16 md:py-20 bg-white">
+      <section id="about" className="py-12 sm:py-16 md:py-20 bg-white scroll-mt-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 items-center">
             {/* Left Content */}
@@ -1229,8 +1257,8 @@ export default function Index() {
             <div>
               <h3 className="font-semibold text-white mb-4">Shop</h3>
               <ul className="space-y-2 text-sm">
-                <li><a href="#products" className="hover:text-gold-400 transition-colors">Products</a></li>
-                <li><a href="#categories" className="hover:text-gold-400 transition-colors">Categories</a></li>
+                <li><button type="button" onClick={() => scrollToSection("products")} className="hover:text-gold-400 transition-colors">Products</button></li>
+                <li><button type="button" onClick={() => scrollToSection("categories")} className="hover:text-gold-400 transition-colors">Categories</button></li>
                 <li><a href="#" className="hover:text-gold-400 transition-colors">New Arrivals</a></li>
                 <li><a href="#" className="hover:text-gold-400 transition-colors">Best Sellers</a></li>
               </ul>
@@ -1250,7 +1278,8 @@ export default function Index() {
             <div>
               <h3 className="font-semibold text-white mb-4">Company</h3>
               <ul className="space-y-2 text-sm">
-                <li><a href="#about" className="hover:text-gold-400 transition-colors">About Us</a></li>
+                <li><button type="button" onClick={() => scrollToSection("about")} className="hover:text-gold-400 transition-colors">About Us</button></li>
+                <li><button type="button" onClick={() => scrollToSection("why-choose-us")} className="hover:text-gold-400 transition-colors">Why Choose Us</button></li>
                 <li><a href="#" className="hover:text-gold-400 transition-colors">Privacy</a></li>
                 <li><a href="#" className="hover:text-gold-400 transition-colors">Terms</a></li>
               </ul>
