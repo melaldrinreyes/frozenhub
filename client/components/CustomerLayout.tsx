@@ -2,6 +2,8 @@ import { ReactNode, useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/authContext";
 import { confirmLogout } from "@/lib/logout";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/apiClient";
 import LoginModal from "@/components/LoginModal";
 import {
   ShoppingBag,
@@ -32,6 +34,32 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [cartItemCount, setCartItemCount] = useState(0);
   const [activeOrdersCount, setActiveOrdersCount] = useState(0);
+
+  // Fetch company branding
+  const { data: companyLogoData } = useQuery({
+    queryKey: ["setting", "company_logo"],
+    queryFn: async () => {
+      try {
+        return await apiClient.getSetting("company_logo");
+      } catch {
+        return { setting: null };
+      }
+    },
+  });
+
+  const { data: companyNameData } = useQuery({
+    queryKey: ["setting", "company_name"],
+    queryFn: async () => {
+      try {
+        return await apiClient.getSetting("company_name");
+      } catch {
+        return { setting: { setting_value: "Batangas Premium Bongabong" } };
+      }
+    },
+  });
+
+  const companyLogo = companyLogoData?.setting?.setting_value;
+  const companyName = companyNameData?.setting?.setting_value || "Batangas Premium Bongabong";
 
   // Get cart item count from localStorage
   useEffect(() => {
@@ -129,13 +157,17 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
           <div className="flex items-center justify-between h-16">
             {/* Logo & Brand */}
             <div className="flex items-center gap-3">
-              <div className="relative">
-                <Snowflake className="h-6 w-6 text-gold-400" />
-                <div className="absolute inset-0 bg-gold-400/20 blur-lg rounded-full" />
-              </div>
+              {companyLogo ? (
+                <img src={companyLogo} alt={companyName} className="h-6 w-6 object-contain" />
+              ) : (
+                <div className="relative">
+                  <Snowflake className="h-6 w-6 text-gold-400" />
+                  <div className="absolute inset-0 bg-gold-400/20 blur-lg rounded-full" />
+                </div>
+              )}
               <div className="hidden sm:block">
                 <h1 className="text-lg font-bold text-gold-400">
-                  Batangas Premium Bongabong
+                  {companyName}
                 </h1>
                 <p className="text-xs text-gray-400">Quality Frozen Foods</p>
               </div>
