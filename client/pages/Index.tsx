@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +50,7 @@ const adjustBrightness = (hex: string, percent: number) => {
 
 export default function Index() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [activeNavItem, setActiveNavItem] = useState("home");
   const heroSectionRef = useRef<HTMLElement | null>(null);
@@ -452,6 +453,18 @@ export default function Index() {
       featuredSectionRef.current.style.backgroundColor = featuredBgColor;
     }
   }, [featuredBgType, featuredBgImage, featuredBgColor]);
+
+  useEffect(() => {
+    if (!location.hash) return;
+
+    const targetId = location.hash.slice(1);
+    const target = document.getElementById(targetId);
+    if (!target) return;
+
+    requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [location.hash]);
 
   // Fetch featured products
   const { data: productsData } = useQuery({
@@ -959,7 +972,7 @@ export default function Index() {
       </section>
 
       {/* Why Choose Us Section */}
-      <section id="about" className="py-12 sm:py-16 bg-white border-t border-gray-200">
+      <section id="why-choose-us" className="py-12 sm:py-16 bg-white border-t border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-8 sm:mb-12">
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
