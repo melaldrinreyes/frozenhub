@@ -59,6 +59,8 @@ function isFalseLike(value: any): boolean {
 
 async function isAccountDisabled(connection: any, userId: string, role: string): Promise<boolean> {
   const hasUserActive = await usersActiveColumnExists(connection);
+  let userDisabled = false;
+
   if (hasUserActive) {
     const [userRows] = await connection.query(
       "SELECT IF(CAST(active AS UNSIGNED) = 1, 1, 0) as active FROM users WHERE id = ? LIMIT 1",
@@ -66,23 +68,32 @@ async function isAccountDisabled(connection: any, userId: string, role: string):
     );
     const user = (userRows as any[])[0];
     if (!user) return true;
-    return isFalseLike(user.active);
+    userDisabled = isFalseLike(user.active);
   }
 
-  if (role !== "rider") return false;
+  if (role !== "rider") return userDisabled;
 
   const hasAssignmentTable = await tableExists(connection, "rider_branch_assignments");
-  if (!hasAssignmentTable) return false;
+  if (!hasAssignmentTable) return userDisabled;
 
   const [assignmentRows] = await connection.query(
-    `SELECT MAX(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as has_active
+    `SELECT COUNT(*) as total_assignments,
+            SUM(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as active_assignments
      FROM rider_branch_assignments
      WHERE rider_id = ?`,
     [userId]
   );
   const assignment = (assignmentRows as any[])[0];
-  if (!assignment) return false;
-  return Number(assignment.has_active || 0) === 0;
+  if (!assignment) return userDisabled;
+
+  const totalAssignments = Number(assignment.total_assignments || 0);
+  const activeAssignments = Number(assignment.active_assignments || 0);
+
+  // No assignment history should not disable riders by default.
+  if (totalAssignments === 0) return false;
+
+  // For riders, assignment state is authoritative when records exist.
+  return activeAssignments === 0;
 }
 
 // Middleware to check if user is authenticated (session or JWT)
