@@ -56,6 +56,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadUser();
   }, []);
 
+  useEffect(() => {
+    const handleForcedLogout = () => {
+      setUser(null);
+    };
+
+    window.addEventListener("auth:forced-logout", handleForcedLogout as EventListener);
+    return () => {
+      window.removeEventListener("auth:forced-logout", handleForcedLogout as EventListener);
+    };
+  }, []);
+
   const login = async (
     email: string,
     password: string,

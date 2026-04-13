@@ -111,6 +111,19 @@ class ApiClient {
         const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
         const rawErrorMessage = errorData.message || errorData.error || `HTTP ${response.status}`;
         const errorMessage = isInfrastructureDbMessage(rawErrorMessage) ? DB_UNAVAILABLE_MESSAGE : rawErrorMessage;
+
+        const shouldForceLogout =
+          response.status === 401 ||
+          (response.status === 403 && Boolean(errorData?.forceLogout || errorData?.disabled));
+
+        if (shouldForceLogout && typeof window !== "undefined") {
+          localStorage.removeItem(JWT_TOKEN_KEY);
+          window.dispatchEvent(
+            new CustomEvent("auth:forced-logout", {
+              detail: { reason: errorMessage, status: response.status },
+            })
+          );
+        }
         
         // Log unauthorized errors except suppressed auth-check calls
         if (response.status === 401 && !suppressAuthErrors) {
