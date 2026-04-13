@@ -176,34 +176,6 @@ function getDevFallbackAdmin(): AuthUser {
   };
 }
 
-async function getRiderAssignmentDisabledState(connection: any, riderId: string): Promise<boolean | null> {
-  try {
-    const [tableRows] = await connection.query("SHOW TABLES LIKE 'rider_branch_assignments'");
-    if ((tableRows as any[]).length === 0) return null;
-
-    const [rows] = await connection.query(
-      `SELECT COUNT(*) as total_assignments,
-              SUM(CASE WHEN active = TRUE THEN 1 ELSE 0 END) as active_assignments
-       FROM rider_branch_assignments
-       WHERE rider_id = ?`,
-      [riderId]
-    );
-
-    const record = (rows as any[])[0];
-  if (!record) return null;
-
-    const totalAssignments = Number(record.total_assignments || 0);
-    const activeAssignments = Number(record.active_assignments || 0);
-
-    // Riders with no assignment history should not be treated as disabled.
-    if (totalAssignments === 0) return false;
-
-    return activeAssignments === 0;
-  } catch {
-    return null;
-  }
-}
-
 export const handleLoginMySQL: RequestHandler = async (req, res) => {
   const { email, password, username, identifier } = req.body;
   const loginIdentifier = String(identifier || username || email || "").trim();
@@ -228,14 +200,7 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
     }
 
     const hasUserActiveColumn = await usersActiveColumnExists(connection);
-    const userDisabled = hasUserActiveColumn ? isFalseLike(user.active) : false;
-
-    let isAccountDisabled = userDisabled;
-    if (String(user.role) === "rider") {
-      const riderAssignmentDisabled = await getRiderAssignmentDisabledState(connection, String(user.id));
-      // For riders, assignment state is the source of truth when available.
-      isAccountDisabled = riderAssignmentDisabled === null ? userDisabled : riderAssignmentDisabled;
-    }
+    const isAccountDisabled = hasUserActiveColumn ? isFalseLike(user.active) : false;
 
     if (isAccountDisabled) {
       res.status(403).json({ error: "Account is disabled. Please contact an administrator." });

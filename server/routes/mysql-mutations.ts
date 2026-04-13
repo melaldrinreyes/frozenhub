@@ -1159,13 +1159,9 @@ export const handleGetUsersMySQL: RequestHandler = async (req, res) => {
     const branchExpr = canUseAssignmentForBranch
       ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.active_branch_id, u.branch_id) ELSE u.branch_id END"
       : "u.branch_id";
-    const activeExpr = canUseAssignmentForActive
-      ? hasUserActiveColumn
-        ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.has_active, IF(CAST(u.active AS UNSIGNED) = 1, 1, 0)) ELSE IF(CAST(u.active AS UNSIGNED) = 1, 1, 0) END"
-        : "CASE WHEN u.role = 'rider' THEN COALESCE(rba.has_active, TRUE) ELSE TRUE END"
-      : hasUserActiveColumn
-        ? "IF(CAST(u.active AS UNSIGNED) = 1, 1, 0)"
-        : "TRUE";
+    const activeExpr = hasUserActiveColumn
+      ? "IF(CAST(u.active AS UNSIGNED) = 1, 1, 0)"
+      : "TRUE";
 
     const clauses: string[] = [];
     const values: any[] = [];
@@ -1414,13 +1410,9 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
            GROUP BY rider_id
          ) rba ON rba.rider_id = u.id`
       : "";
-    const selectActiveExpr = canUseAssignmentForActive
-      ? hasUserActiveColumn
-        ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.has_active, IF(CAST(u.active AS UNSIGNED) = 1, 1, 0)) ELSE IF(CAST(u.active AS UNSIGNED) = 1, 1, 0) END"
-        : "CASE WHEN u.role = 'rider' THEN COALESCE(rba.has_active, TRUE) ELSE TRUE END"
-      : hasUserActiveColumn
-        ? "IF(CAST(u.active AS UNSIGNED) = 1, 1, 0)"
-        : "TRUE";
+    const selectActiveExpr = hasUserActiveColumn
+      ? "IF(CAST(u.active AS UNSIGNED) = 1, 1, 0)"
+      : "TRUE";
     const selectBranchExpr = canUseAssignmentForBranch
       ? "CASE WHEN u.role = 'rider' THEN COALESCE(rba.active_branch_id, u.branch_id) ELSE u.branch_id END"
       : "u.branch_id";
