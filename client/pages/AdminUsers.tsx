@@ -201,11 +201,6 @@ export default function AdminUsers() {
 
   const getStatusLabel = (user: any) => (isUserActive(user) ? "Enabled" : "Disabled");
 
-  const getStatusActionClasses = (user: any) =>
-    isUserActive(user)
-      ? "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
-      : "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100";
-
   const handleOpenDialog = (user?: any) => {
     if (user) {
       setEditingId(user.id);
@@ -650,26 +645,18 @@ export default function AdminUsers() {
                             <div className="flex items-center justify-between gap-3">
                               <div>
                                 <p className="text-xs font-medium text-slate-500">Rider Status</p>
-                                <span
-                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold mt-1 ${getStatusStyles(user)}`}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleToggleRiderStatus(user)}
+                                  disabled={toggleRiderStatusMutation.isPending}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold mt-1 h-auto ${getStatusStyles(user)} hover:opacity-90`}
                                 >
                                   <span className="h-1.5 w-1.5 rounded-full bg-white/90" />
                                   {getStatusLabel(user)}
-                                </span>
+                                </Button>
                               </div>
-                              <Button
-                                size="sm"
-                                variant={isUserActive(user) ? "destructive" : "default"}
-                                className={
-                                  isUserActive(user)
-                                    ? "bg-rose-600 hover:bg-rose-700 text-white"
-                                    : "bg-emerald-600 hover:bg-emerald-700 text-white"
-                                }
-                                onClick={() => handleToggleRiderStatus(user)}
-                                disabled={toggleRiderStatusMutation.isPending}
-                              >
-                                {isUserActive(user) ? "Disable" : "Enable"}
-                              </Button>
+                              <p className="text-xs text-slate-500">Tap status to change</p>
                             </div>
                           </div>
                         )}
@@ -746,12 +733,16 @@ export default function AdminUsers() {
                       </td>
                       <td className="py-3 px-4">
                         {user.role === "rider" ? (
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${getStatusStyles(user)}`}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleToggleRiderStatus(user)}
+                            disabled={toggleRiderStatusMutation.isPending}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold h-auto ${getStatusStyles(user)} hover:opacity-90`}
                           >
                             <span className="h-1.5 w-1.5 rounded-full bg-white/90" />
                             {getStatusLabel(user)}
-                          </span>
+                          </Button>
                         ) : (
                           <span className="text-xs font-medium text-slate-400">-</span>
                         )}
@@ -766,17 +757,6 @@ export default function AdminUsers() {
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
-                            {user.role === "rider" && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className={`h-8 px-2 text-xs font-semibold ${getStatusActionClasses(user)}`}
-                                onClick={() => handleToggleRiderStatus(user)}
-                                disabled={toggleRiderStatusMutation.isPending}
-                              >
-                                {isUserActive(user) ? "Disable" : "Enable"}
-                              </Button>
-                            )}
                           <Button
                             size="sm"
                             variant="ghost"
