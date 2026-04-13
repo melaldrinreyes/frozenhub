@@ -566,7 +566,7 @@ export default function Index() {
             </div>
 
             {/* Navigation */}
-            <nav className="hidden lg:flex items-center gap-2 xl:gap-3">
+            <nav className="hidden md:flex items-center gap-2 xl:gap-3">
               {sectionLinks.map((section) => (
                 <button
                   key={section.id}
@@ -592,6 +592,25 @@ export default function Index() {
               >
                 <span>Login</span>
               </Button>
+            </div>
+          </div>
+
+          <div className="md:hidden pb-3 -mx-1">
+            <div className="flex items-center gap-2 overflow-x-auto thin-scrollbar px-1">
+              {sectionLinks.map((section) => (
+                <button
+                  key={`mobile-${section.id}`}
+                  type="button"
+                  onClick={() => scrollToSection(section.id)}
+                  className={`shrink-0 px-3 py-1.5 rounded-full transition-colors text-xs font-medium ${
+                    activeNavItem === section.id
+                      ? "bg-gold-500/20 text-gold-300 border border-gold-500/40"
+                      : "text-gray-300 border border-white/15 bg-white/5 hover:text-gold-300"
+                  }`}
+                >
+                  {section.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
