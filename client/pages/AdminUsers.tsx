@@ -656,7 +656,6 @@ export default function AdminUsers() {
                                   {getStatusLabel(user)}
                                 </Button>
                               </div>
-                              <p className="text-xs text-slate-500">Tap status to change</p>
                             </div>
                           </div>
                         )}
