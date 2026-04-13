@@ -86,16 +86,6 @@ async function seedLegacyInventoryBatchIfNeeded(
   productId: string,
   branchId: string,
 ) {
-  const [countRows] = await connection.query(
-    `SELECT COUNT(*) AS total
-     FROM inventory_batches
-     WHERE product_id = ? AND branch_id = ? AND quantity_remaining > 0`,
-    [productId, branchId]
-  );
-
-  const existing = toInt((countRows as any[])[0]?.total, 0);
-  if (existing > 0) return;
-
   const [rows] = await connection.query(
     `SELECT i.quantity, p.cost
      FROM inventory i
@@ -106,14 +96,26 @@ async function seedLegacyInventoryBatchIfNeeded(
   );
 
   const inv = (rows as any[])[0];
-  const quantity = toInt(inv?.quantity, 0);
-  if (quantity <= 0) return;
+  const inventoryQuantity = toInt(inv?.quantity, 0);
+  if (inventoryQuantity <= 0) return;
+
+  const [sumRows] = await connection.query(
+    `SELECT COALESCE(SUM(quantity_remaining), 0) AS total_remaining
+     FROM inventory_batches
+     WHERE product_id = ? AND branch_id = ?`,
+    [productId, branchId]
+  );
+  const trackedRemaining = toInt((sumRows as any[])[0]?.total_remaining, 0);
+
+  // Backfill only the missing portion so FIFO layers stay consistent with inventory quantity.
+  const missingQuantity = inventoryQuantity - trackedRemaining;
+  if (missingQuantity <= 0) return;
 
   const unitCost = toNumber(inv?.cost, 0);
   await recordInboundInventoryBatch(connection, {
     productId,
     branchId,
-    quantity,
+    quantity: missingQuantity,
     unitCost,
     sourceType: "seed",
     sourceRef: `${productId}:${branchId}`,
