@@ -46,7 +46,11 @@ export async function logActivity(
 
     return logId;
   } catch (error) {
-    console.error("Activity log error:", error);
+    console.error("Activity log error:", {
+      action: data.action,
+      entityType: data.entityType,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   }
 }

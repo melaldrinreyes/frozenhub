@@ -293,6 +293,16 @@ export const handleCreateProductMySQL: RequestHandler = async (req, res) => {
       suffix += 1;
     }
 
+    // Check for duplicate barcode
+    const [barcodeRows] = await connection.query(
+      "SELECT id FROM products WHERE barcode = ? LIMIT 1",
+      [String(safeBarcode).trim()]
+    );
+    if ((barcodeRows as any[]).length > 0) {
+      res.status(409).json({ error: "This barcode is already in use by another product. Please use a unique barcode." });
+      return;
+    }
+
     await connection.query(
       `INSERT INTO products (
         id, name, sku, barcode, category, description, price, cost, image, active, created_at
@@ -329,6 +339,10 @@ export const handleCreateProductMySQL: RequestHandler = async (req, res) => {
     res.status(201).json({ product: (rows as any[])[0], generatedSKU: resolvedSku });
   } catch (error: any) {
     console.error("MySQL create product error:", error);
+    if (String(error?.message || "").includes("Duplicate entry") && String(error?.message || "").includes("barcode")) {
+      res.status(409).json({ error: "This barcode is already in use by another product. Please use a unique barcode." });
+      return;
+    }
     if (String(error?.message || "").includes("Duplicate entry")) {
       res.status(409).json({ error: "Product with same SKU or barcode already exists" });
       return;
@@ -343,7 +357,6 @@ export const handleUpdateProductMySQL: RequestHandler = async (req, res) => {
   const { id } = req.params;
   const {
     name,
-    sku,
     barcode,
     category,
     description,
@@ -361,10 +374,6 @@ export const handleUpdateProductMySQL: RequestHandler = async (req, res) => {
   if (name !== undefined) {
     updates.push("name = ?");
     values.push(String(name).trim());
-  }
-  if (sku !== undefined) {
-    updates.push("sku = ?");
-    values.push(String(sku).trim());
   }
   if (barcode !== undefined) {
     updates.push("barcode = ?");
@@ -418,6 +427,19 @@ export const handleUpdateProductMySQL: RequestHandler = async (req, res) => {
       }
     }
 
+    // Check for duplicate barcode if barcode is being updated
+    if (barcode !== undefined) {
+      const barcodeToCheck = String(barcode).trim();
+      const [barcodeRows] = await connection.query(
+        "SELECT id FROM products WHERE barcode = ? AND id != ? LIMIT 1",
+        [barcodeToCheck, id]
+      );
+      if ((barcodeRows as any[]).length > 0) {
+        res.status(409).json({ error: `This barcode is already used by another product. Please use a unique barcode.` });
+        return;
+      }
+    }
+
     values.push(id);
     const [result] = await connection.query(`UPDATE products SET ${updates.join(", ")} WHERE id = ?`, values);
 
@@ -428,24 +450,27 @@ export const handleUpdateProductMySQL: RequestHandler = async (req, res) => {
 
     const [rows] = await connection.query("SELECT * FROM products WHERE id = ? LIMIT 1", [id]);
     const updatedProduct = (rows as any[])[0];
-    await logActivity(connection, {
-      userId: req.user?.id || null,
-      userName: req.user?.name || null,
-      userRole: req.user?.role || null,
-      action: "UPDATE_PRODUCT",
-      entityType: "product",
-      entityId: id,
-      entityName: updatedProduct?.name || id,
-      description: `Product ${updatedProduct?.name || id} updated. Reason: ${normalizedReason}`,
-      metadata: { sku, barcode, category, price, cost, active, reason: normalizedReason },
-      ipAddress: req.ip || null,
-      branchId: req.user?.branch_id || null,
-    });
-    res.json({ product: (rows as any[])[0] });
+    
+    if (updatedProduct) {
+      await logActivity(connection, {
+        userId: req.user?.id || null,
+        userName: req.user?.name || null,
+        userRole: req.user?.role || null,
+        action: "UPDATE_PRODUCT",
+        entityType: "product",
+        entityId: id,
+        entityName: updatedProduct?.name || id,
+        description: `Product ${updatedProduct?.name || id} updated. Reason: ${normalizedReason}`,
+        metadata: { barcode, category, price, cost, active, reason: normalizedReason },
+        ipAddress: req.ip || null,
+        branchId: req.user?.branch_id || null,
+      });
+    }
+    res.json({ product: updatedProduct });
   } catch (error: any) {
     console.error("MySQL update product error:", error);
     if (String(error?.message || "").includes("Duplicate entry")) {
-      res.status(409).json({ error: "Duplicate SKU or barcode" });
+      res.status(409).json({ error: "This barcode is already in use. Please use a unique barcode." });
       return;
     }
     res.status(500).json({ error: "Failed to update product" });

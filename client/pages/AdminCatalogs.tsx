@@ -67,7 +67,6 @@ export default function AdminCatalogs() {
   const [adminPassword, setAdminPassword] = useState("");
   const [formData, setFormData] = useState({
     name: "",
-    sku: "",
     barcode: "", // Added barcode field
     category: "",
     description: "",
@@ -175,7 +174,6 @@ export default function AdminCatalogs() {
   if (searchTerm) {
     filteredProducts = filterBySearch(filteredProducts, searchTerm, [
       "name",
-      "sku",
     ]);
   }
 
@@ -200,7 +198,6 @@ export default function AdminCatalogs() {
       setEditingId(product.id);
       setFormData({
         name: product.name,
-        sku: product.sku,
         barcode: product.barcode || "",
         category: product.category,
         description: product.description,
@@ -217,7 +214,6 @@ export default function AdminCatalogs() {
       setEditingId(null);
       setFormData({
         name: "",
-        sku: "",
         barcode: "",
         category: "",
         description: "",
@@ -295,7 +291,6 @@ export default function AdminCatalogs() {
       setEditingId(null);
       setFormData({
         name: "",
-        sku: "",
         barcode: "",
         category: "",
         description: "",
@@ -448,17 +443,15 @@ export default function AdminCatalogs() {
                 Add Product
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingId ? "Edit Product" : "Add New Product"}
-                </DialogTitle>
-              </DialogHeader>
+            <DialogContent className="max-w-2xl w-[75vw] h-auto fixed py-3">
+              <DialogTitle className="text-base">
+                {editingId ? "Edit Product" : "Add New Product"}
+              </DialogTitle>
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Product Name *</Label>
+              <div className="space-y-0.5 pr-2 pb-1">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="name" className="text-sm">Product Name *</Label>
                     <Input
                       id="name"
                       value={formData.name || ""}
@@ -466,27 +459,12 @@ export default function AdminCatalogs() {
                         setFormData({ ...formData, name: e.target.value })
                       }
                       placeholder="Frozen Chicken Breast"
+                      className="text-sm"
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="sku">
-                      SKU <span className="text-muted-foreground text-xs">(Optional - Auto-generated if empty)</span>
-                    </Label>
-                    <Input
-                      id="sku"
-                      value={formData.sku || ""}
-                      onChange={(e) =>
-                        setFormData({ ...formData, sku: e.target.value })
-                      }
-                      placeholder="Leave empty for auto-generation"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="category">Category *</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="category" className="text-sm">Category *</Label>
                     <Select
                       value={formData.category || ""}
                       onValueChange={(value) =>
@@ -505,8 +483,10 @@ export default function AdminCatalogs() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
 
-                  <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
                     <Label htmlFor="barcode">Barcode</Label>
                     <Input
                       id="barcode"
@@ -528,18 +508,18 @@ export default function AdminCatalogs() {
                     )}
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     <Label htmlFor="image">Product Image</Label>
-                    <div className="space-y-2">
+                    <div className="space-y-1">
                       <Input
                         id="image"
                         type="file"
                         accept="image/*"
                         onChange={handleFileSelect}
-                        className="cursor-pointer"
+                        className="cursor-pointer text-xs"
                       />
                       {imagePreview && (
-                        <div className="relative w-32 h-32 border rounded-lg overflow-hidden">
+                        <div className="relative w-16 h-16 border rounded-lg overflow-hidden">
                           <img
                             src={imagePreview}
                             alt="Preview"
@@ -547,15 +527,15 @@ export default function AdminCatalogs() {
                           />
                         </div>
                       )}
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-400 hidden">
                         Max size: 5MB. Formats: JPEG, PNG, GIF, WebP
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description (Optional)</Label>
+                <div className="space-y-1">
+                  <Label htmlFor="description" className="text-sm">Description (Optional)</Label>
                   <textarea
                     id="description"
                     value={formData.description || ""}
@@ -563,14 +543,14 @@ export default function AdminCatalogs() {
                       setFormData({ ...formData, description: e.target.value })
                     }
                     placeholder="Product description"
-                    className="w-full border border-slate-300 rounded-lg p-2"
-                    rows={3}
+                    className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+                    rows={1}
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="price">Retail Price (₱) *</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="price" className="text-sm">Retail Price (₱) *</Label>
                     <Input
                       id="price"
                       type="number"
@@ -583,11 +563,12 @@ export default function AdminCatalogs() {
                         })
                       }
                       placeholder="12.99"
+                      className="text-sm"
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="cost">Cost Price (₱) *</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="cost" className="text-sm">Cost Price (₱) *</Label>
                     <Input
                       id="cost"
                       type="number"
@@ -600,24 +581,28 @@ export default function AdminCatalogs() {
                         })
                       }
                       placeholder="6.50"
+                      className="text-sm"
                     />
                   </div>
+                  <div></div>
                 </div>
 
                 {editingId && (
                   <>
-                    <div className="space-y-2">
-                      <Label htmlFor="update-reason">Reason for Update *</Label>
+                    <div className="space-y-1">
+                      <Label htmlFor="update-reason" className="text-sm">Reason for Update *</Label>
                       <Textarea
                         id="update-reason"
                         value={updateReason}
                         onChange={(e) => setUpdateReason(e.target.value)}
                         placeholder="Explain why this product is being updated"
+                        className="text-sm"
+                        rows={1}
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="admin-password">Admin Password *</Label>
+                    <div className="space-y-1">
+                      <Label htmlFor="admin-password" className="text-sm">Admin Password *</Label>
                       <Input
                         id="admin-password"
                         type="password"
@@ -625,15 +610,16 @@ export default function AdminCatalogs() {
                         onChange={(e) => setAdminPassword(e.target.value)}
                         placeholder="Enter admin password"
                         autoComplete="current-password"
+                        className="text-sm"
                       />
                     </div>
                   </>
                 )}
 
-                <div className="flex gap-3 pt-4">
+                <div className="flex gap-2 pt-1 pb-1">
                   <Button
                     onClick={handleSaveProduct}
-                    className="flex-1 bg-gold-500 hover:bg-gold-600 text-black font-semibold"
+                    className="flex-1 bg-gold-500 hover:bg-gold-600 text-black font-semibold text-sm h-8"
                     disabled={isUploading}
                   >
                     {isUploading ? "Uploading..." : editingId ? "Update Product" : "Add Product"}
@@ -641,7 +627,7 @@ export default function AdminCatalogs() {
                   <Button
                     onClick={() => setIsDialogOpen(false)}
                     variant="outline"
-                    className="flex-1"
+                    className="flex-1 text-sm"
                     disabled={isUploading}
                   >
                     Cancel
@@ -779,7 +765,7 @@ export default function AdminCatalogs() {
                 <Search className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
                 <Input
                   type="text"
-                  placeholder="Search by name or SKU..."
+                  placeholder="Search by name..."
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value);
@@ -904,9 +890,6 @@ export default function AdminCatalogs() {
                               </p>
                             )}
                             <div className="flex items-center gap-2">
-                              <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
-                                SKU: {product.sku}
-                              </span>
                               <button
                                 onClick={() => toggleActive(product.id)}
                                 className={`px-2 py-0.5 rounded-full text-xs font-semibold transition-colors ${
@@ -997,9 +980,6 @@ export default function AdminCatalogs() {
                           Product
                         </th>
                         <th className="text-left py-3 px-4 font-semibold text-slate-900">
-                          SKU
-                        </th>
-                        <th className="text-left py-3 px-4 font-semibold text-slate-900">
                           Category
                         </th>
                         <th className="text-left py-3 px-4 font-semibold text-slate-900">
@@ -1054,9 +1034,6 @@ export default function AdminCatalogs() {
                                   </p>
                                 </div>
                               </div>
-                            </td>
-                            <td className="py-3 px-4 text-slate-600">
-                              {product.sku}
                             </td>
                             <td className="py-3 px-4 text-slate-600">
                               {product.category}
