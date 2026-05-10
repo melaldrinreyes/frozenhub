@@ -301,6 +301,8 @@ export default function AdminInventory() {
     }
   };
 
+  const canDeleteInventory = (item: any) => Number(item.quantity || 0) <= 0;
+
   const getStockStatus = (item: any) => {
     const percentage = (item.quantity / item.reorder_level) * 100;
     if (percentage === 0) return { label: "Out of Stock", color: "red" };
@@ -735,8 +737,9 @@ export default function AdminInventory() {
                         size="sm"
                         variant="outline"
                         onClick={() => handleDelete(item.id)}
-                        disabled={deleteInventoryMutation.isPending}
+                        disabled={deleteInventoryMutation.isPending || !canDeleteInventory(item)}
                         className="flex-1 gap-2 text-red-600 hover:text-red-700"
+                        title={!canDeleteInventory(item) ? "Cannot delete while stock remains" : undefined}
                       >
                         <Trash2 className="w-4 h-4" />
                         Delete
@@ -951,8 +954,9 @@ export default function AdminInventory() {
                             size="sm"
                             variant="ghost"
                             onClick={() => handleDelete(item.id)}
-                            disabled={deleteInventoryMutation.isPending}
+                            disabled={deleteInventoryMutation.isPending || !canDeleteInventory(item)}
                             className="h-8 w-8 p-0"
+                            title={!canDeleteInventory(item) ? "Cannot delete while stock remains" : undefined}
                           >
                             <Trash2 className="w-4 h-4 text-red-500" />
                           </Button>

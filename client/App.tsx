@@ -47,6 +47,14 @@ import AdminSales from "./pages/AdminSales";
 const QueryClientCtor = (ReactQuery as any).QueryClient;
 const queryClient = new QueryClientCtor();
 
+if (import.meta.env.DEV && "serviceWorker" in navigator) {
+  void navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach((registration) => {
+      registration.unregister();
+    });
+  });
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>

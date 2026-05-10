@@ -800,8 +800,34 @@ export const handleDeleteInventoryMySQL: RequestHandler = async (req, res) => {
   let connection;
   try {
     connection = await getConnection();
+    await connection.beginTransaction();
+
+    const [currentRows] = await connection.query(
+      `SELECT id, quantity, product_id, branch_id
+       FROM inventory
+       WHERE id = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [id]
+    );
+    const currentInventory = (currentRows as any[])[0];
+
+    if (!currentInventory) {
+      await connection.rollback();
+      res.status(404).json({ error: "Inventory item not found" });
+      return;
+    }
+
+    const currentQuantity = Math.max(0, Number(currentInventory.quantity || 0));
+    if (currentQuantity > 0) {
+      await connection.rollback();
+      res.status(409).json({ error: "Cannot delete inventory item while stock remains" });
+      return;
+    }
+
     const [result] = await connection.query("DELETE FROM inventory WHERE id = ?", [id]);
     if (Number((result as any)?.affectedRows || 0) === 0) {
+      await connection.rollback();
       res.status(404).json({ error: "Inventory item not found" });
       return;
     }
@@ -818,8 +844,16 @@ export const handleDeleteInventoryMySQL: RequestHandler = async (req, res) => {
       ipAddress: req.ip || null,
       branchId: req.user?.branch_id || null,
     });
+    await connection.commit();
     res.json({ message: "Inventory item deleted successfully" });
   } catch (error) {
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch {
+        // ignore rollback failure
+      }
+    }
     console.error("MySQL delete inventory error:", error);
     res.status(500).json({ error: "Failed to delete inventory" });
   } finally {
