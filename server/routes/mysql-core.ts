@@ -1450,6 +1450,7 @@ export const handleGetSalesMySQL: RequestHandler = async (req, res) => {
 
     const [salesRows] = await connection.query(
             `SELECT s.id, s.date as sale_date, s.branch_id, s.total_amount, s.items_count,
+              s.subtotal, s.discount_amount,
               s.payment_method, s.status, s.created_by, s.assigned_rider_id, s.customer_info, s.notes,
               CASE
                 WHEN s.payment_status IN ('succeeded', 'paid', 'completed') THEN 'succeeded'
@@ -1459,6 +1460,9 @@ export const handleGetSalesMySQL: RequestHandler = async (req, res) => {
               END as payment_status,
               s.picked_up_at, s.delivered_at,
               rider.name as assigned_rider_name,
+              b.name as branch_name,
+              b.location as branch_location,
+              u.name as cashier_name,
               CASE
                 WHEN s.customer_info IS NULL OR TRIM(COALESCE(CONCAT('', s.customer_info), '')) IN ('', '{}', 'null') THEN 'pos'
                 ELSE 'online'
@@ -1469,6 +1473,8 @@ export const handleGetSalesMySQL: RequestHandler = async (req, res) => {
               JSON_UNQUOTE(JSON_EXTRACT(s.customer_info, '$.email')) as customer_email
        FROM sales s
             LEFT JOIN users rider ON rider.id = s.assigned_rider_id
+            LEFT JOIN branches b ON b.id = s.branch_id
+            LEFT JOIN users u ON u.id = s.created_by
        ${where}
        ORDER BY s.date DESC
        LIMIT ${limitNum} OFFSET ${offset}`,

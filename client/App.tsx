@@ -42,6 +42,7 @@ import RiderProfile from "./pages/RiderProfile";
 import AdminManageBranches from "./pages/AdminManageBranches";
 import BranchMessages from "./pages/BranchMessages";
 import AdminMessages from "./pages/AdminMessages";
+import AdminSales from "./pages/AdminSales";
 
 const QueryClientCtor = (ReactQuery as any).QueryClient;
 const queryClient = new QueryClientCtor();
@@ -87,14 +88,6 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={["admin"]}>
                   <AdminCatalogs />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/pricing"
-              element={
-                <ProtectedRoute allowedRoles={["admin"]}>
-                  <AdminPricing />
                 </ProtectedRoute>
               }
             />
@@ -155,6 +148,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={["admin"]}>
                   <AuditLogs />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/sales"
+              element={
+                <ProtectedRoute allowedRoles={["admin"]}>
+                  <AdminSales />
                 </ProtectedRoute>
               }
             />

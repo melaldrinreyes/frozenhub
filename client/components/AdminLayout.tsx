@@ -162,6 +162,7 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
     { label: "Catalogs", href: "/admin/catalogs", icon: BarChart3 },
     { label: "Promos", href: "/admin/promos", icon: Tag },
     { label: "Inventory", href: "/admin/inventory", icon: Package },
+    { label: "Sales", href: "/admin/sales", icon: DollarSign },
     { label: "Branches", href: "/admin/branches", icon: Package },
     { label: "Users", href: "/admin/users", icon: Users },
     { label: "Transfer Logs", href: "/admin/transfer-logs", icon: FileText },
