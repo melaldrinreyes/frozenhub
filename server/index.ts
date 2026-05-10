@@ -138,6 +138,15 @@ import {
   handleDeleteActivityLog,
 } from "./routes/activity-logs";
 import {
+  handleGetConversations,
+  handleGetMessages,
+  handleSendMessage,
+  handleGetUnreadCount,
+  handleDebugMessages,
+  handleDeleteMessage,
+  handleDeleteConversation,
+} from "./routes/messages";
+import {
   handleLoginMySQL,
   handleSignupMySQL,
   handleForgotPasswordMySQL,
@@ -564,6 +573,15 @@ export function createServer() {
   app.get("/api/activity-logs/recent", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleGetRecentActivity);
   app.delete("/api/activity-logs/:id", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleDeleteActivityLog);
   app.get("/api/audit-logs", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleGetActivityLogs);
+
+  // Messaging routes
+  app.get("/api/conversations", requireAuth, apiRateLimiter, handleGetConversations);
+  app.get("/api/conversations/:conversationId/messages", requireAuth, apiRateLimiter, handleGetMessages);
+  app.post("/api/messages", requireAuth, apiRateLimiter, handleSendMessage);
+  app.delete("/api/messages/:messageId", requireAuth, apiRateLimiter, handleDeleteMessage);
+  app.delete("/api/conversations/:conversationId", requireAuth, apiRateLimiter, handleDeleteConversation);
+  app.get("/api/messages/unread-count", requireAuth, apiRateLimiter, handleGetUnreadCount);
+  app.get("/api/messages/debug", requireAuth, apiRateLimiter, handleDebugMessages);
   app.get("/api/audit-logs/stats", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleGetActivityStats);
   app.get("/api/audit-logs/recent", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleGetRecentActivity);
   app.delete("/api/audit-logs/:id", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleDeleteActivityLog);

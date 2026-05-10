@@ -649,6 +649,26 @@ async function ensureSchema(connection: PgConnection) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CHECK (quantity > 0)
     )`,
+    `CREATE TABLE IF NOT EXISTS conversations (
+      id TEXT PRIMARY KEY,
+      customer_id TEXT NULL REFERENCES users(id) ON DELETE CASCADE,
+      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+      last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      customer_unread_count INTEGER NOT NULL DEFAULT 0,
+      branch_unread_count INTEGER NOT NULL DEFAULT 0,
+      deleted_for JSONB DEFAULT '[]'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      sender_role TEXT NOT NULL CHECK (sender_role IN ('customer', 'branch_admin', 'admin')),
+      message_text TEXT NOT NULL,
+      is_read BOOLEAN NOT NULL DEFAULT FALSE,
+      deleted_for JSONB DEFAULT '[]'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
   ]);
 
   await executeStatements(connection, [
@@ -711,6 +731,13 @@ async function ensureSchema(connection: PgConnection) {
     `CREATE INDEX IF NOT EXISTS idx_inventory_batches_source_ref ON inventory_batches(source_type, source_ref)`,
     `CREATE INDEX IF NOT EXISTS idx_sale_item_inventory_batches_sale_item ON sale_item_inventory_batches(sale_item_id)`,
     `CREATE INDEX IF NOT EXISTS idx_sale_item_inventory_batches_batch ON sale_item_inventory_batches(batch_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_conversations_customer ON conversations(customer_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_conversations_branch ON conversations(branch_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_conversations_last_message ON conversations(last_message_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_messages_is_read ON messages(is_read)`,
   ]);
 }
 

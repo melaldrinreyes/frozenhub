@@ -30,7 +30,7 @@ SELECT id, name, email, disabled FROM users LIMIT 5;
 7. You should see your users with `disabled = false`
 
 **Option B: Using the SQL file**
-1. Open the file: `add-disabled-column.sql`
+1. Open the file: `add-disabled-column.sql  
 2. Copy all the SQL code
 3. Run it in Supabase SQL Editor
 

@@ -13,6 +13,7 @@ import {
   LogIn,
   LogOut,
   Snowflake,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +35,18 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [cartItemCount, setCartItemCount] = useState(0);
   const [activeOrdersCount, setActiveOrdersCount] = useState(0);
+
+  // Fetch unread message count
+  const { data: unreadMessagesCount = 0 } = useQuery({
+    queryKey: ["unreadCount"],
+    queryFn: async () => {
+      if (!user) return 0;
+      const result = await apiClient.getUnreadMessageCount();
+      return result?.unreadCount || 0;
+    },
+    enabled: !!user,
+    refetchInterval: 5000, // Check every 5 seconds
+  });
 
   // Fetch company branding
   const { data: companyLogoData } = useQuery({
@@ -233,6 +246,27 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
                     setShowLoginModal(true);
                     return;
                   }
+                  navigate("/customer/messages");
+                }}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black relative ${
+                  isActive("/customer/messages")
+                    ? "bg-gold-500/15 text-gold-300 shadow-sm"
+                    : "text-gray-300 hover:bg-white/5 hover:text-gold-300"
+                }`}
+              >
+                Messages
+                {unreadMessagesCount > 0 && (
+                  <Badge className="ml-2 bg-blue-500 text-white text-xs px-1.5 py-0 animate-pulse">
+                    {unreadMessagesCount}
+                  </Badge>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  if (!user) {
+                    setShowLoginModal(true);
+                    return;
+                  }
                   navigate("/customer/profile");
                 }}
                 className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
@@ -335,6 +369,31 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
               )}
             </div>
             <span className="text-xs font-medium">Cart</span>
+          </button>
+
+          <button
+            onClick={() => {
+              if (!user) {
+                setShowLoginModal(true);
+                return;
+              }
+              navigate("/customer/messages");
+            }}
+            className={`flex flex-col items-center justify-center gap-1 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-400/70 relative ${
+              isActive("/customer/messages")
+                ? "text-gold-300 bg-gold-500/15"
+                : "text-gray-400 hover:text-gold-300 hover:bg-white/5"
+            }`}
+          >
+            <div className="relative">
+              <MessageCircle className="w-5 h-5" />
+              {unreadMessagesCount > 0 && (
+                <Badge className="absolute -top-2 -right-2 h-4 w-4 flex items-center justify-center p-0 text-[10px] font-bold bg-blue-500 hover:bg-blue-500 animate-pulse min-w-[16px]">
+                  {unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
+                </Badge>
+              )}
+            </div>
+            <span className="text-xs font-medium">Messages</span>
           </button>
 
           <button

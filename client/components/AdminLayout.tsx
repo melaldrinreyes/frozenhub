@@ -24,6 +24,7 @@ import {
   Tag,
   MoreHorizontal,
   Globe,
+  MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -145,6 +146,17 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
     refetchInterval: 10000, // Check every 10 seconds
   });
 
+  // Fetch unread message count
+  const { data: unreadMessagesCount = 0 } = useQuery({
+    queryKey: ["unreadCount"],
+    queryFn: async () => {
+      const result = await apiClient.getUnreadMessageCount();
+      return result?.unreadCount || 0;
+    },
+    enabled: !!user,
+    refetchInterval: 5000, // Check every 5 seconds
+  });
+
   const adminNavigation = [
     { label: "Dashboard", href: "/admin/dashboard", icon: Home },
     { label: "Catalogs", href: "/admin/catalogs", icon: BarChart3 },
@@ -155,6 +167,7 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
     { label: "Users", href: "/admin/users", icon: Users },
     { label: "Transfer Logs", href: "/admin/transfer-logs", icon: FileText },
     { label: "Audit Logs", href: "/admin/audit-logs", icon: FileText },
+    { label: "Messages", href: "/admin/messages", icon: MessageCircle },
     { label: "CMS", href: "/admin/cms", icon: Layout },
     { label: "Settings", href: "/admin/settings", icon: Settings },
   ];
@@ -167,6 +180,7 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
     { label: "Online Orders", href: "/branch/online-orders", icon: Globe },
     { label: "Audit Logs", href: "/branch/audit-logs", icon: FileText },
     // { label: "POS Operators", href: "/branch/users", icon: Users }, // Removed as requested
+    { label: "Messages", href: "/branch/messages", icon: MessageCircle },
     { label: "Settings", href: "/branch/settings", icon: Settings },
   ];
 
@@ -229,6 +243,7 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
               const showTransferBadge = 
                 (item.label === "Transfer Logs" || item.label === "Inventory") && 
                 newTransfersCount > 0;
+              const showMessageBadge = item.label === "Messages" && unreadMessagesCount > 0;
 
               return (
                 <Link
@@ -251,6 +266,11 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
                   {showTransferBadge && (
                     <Badge className="bg-blue-500 text-white text-xs px-2 py-0.5 animate-pulse">
                       {newTransfersCount}
+                    </Badge>
+                  )}
+                  {showMessageBadge && (
+                    <Badge className="bg-blue-500 text-white text-xs px-2 py-0.5 animate-pulse">
+                      {unreadMessagesCount}
                     </Badge>
                   )}
                 </Link>

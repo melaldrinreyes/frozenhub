@@ -41,7 +41,6 @@ import CustomerMessages from "./pages/CustomerMessages";
 import RiderProfile from "./pages/RiderProfile";
 import AdminManageBranches from "./pages/AdminManageBranches";
 import BranchMessages from "./pages/BranchMessages";
-import AdminMessages from "./pages/AdminMessages";
 
 const QueryClientCtor = (ReactQuery as any).QueryClient;
 const queryClient = new QueryClientCtor();
@@ -158,14 +157,6 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/admin/messages"
-              element={
-                <ProtectedRoute allowedRoles={["admin"]}>
-                  <AdminMessages />
-                </ProtectedRoute>
-              }
-            />
 
             {/* Branch Admin Routes */}
             <Route
@@ -279,7 +270,7 @@ const App = () => (
               }
             />
 
-            {/* Rider Routes */}
+            {/* Rider Routes */
             <Route
               path="/rider/dashboard"
               element={
@@ -288,7 +279,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-            <Route path="/rider/profile" element={<Navigate to="/rider/dashboard" replace />} />
+            <Route`n              path="/rider/profile"`n              element={<Navigate to="/rider/dashboard" replace />}`n            />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

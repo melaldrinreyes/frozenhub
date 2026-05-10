@@ -821,6 +821,38 @@ class ApiClient {
       body: JSON.stringify({ items }),
     });
   }
+
+  // Messaging methods
+  async getConversations() {
+    return this.request<{ conversations: any[] }>("/conversations");
+  }
+
+  async getMessages(conversationId: string) {
+    return this.request<{ messages: any[] }>(`/conversations/${conversationId}/messages`);
+  }
+
+  async sendMessage(data: { conversationId?: string; branchId?: string; messageText: string }) {
+    return this.request<{ message: any }>("/messages", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteMessage(messageId: string) {
+    return this.request<{ message: string }>(`/messages/${messageId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async deleteConversation(conversationId: string) {
+    return this.request<{ message: string }>(`/conversations/${conversationId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getUnreadMessageCount() {
+    return this.request<{ unreadCount: number }>("/messages/unread-count");
+  }
 }
 
 export const apiClient = new ApiClient();
