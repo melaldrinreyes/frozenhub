@@ -307,7 +307,7 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
 
       {/* Bottom Navigation - Mobile Only */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 px-3 pb-3">
-        <div className="grid grid-cols-5 h-16 rounded-2xl border border-gold-500/20 bg-black/92 backdrop-blur-xl shadow-[0_-12px_30px_rgba(0,0,0,0.35)] overflow-hidden">
+        <div className="grid grid-cols-4 h-16 rounded-2xl border border-gold-500/20 bg-black/92 backdrop-blur-xl shadow-[0_-12px_30px_rgba(0,0,0,0.35)] overflow-hidden">
 
           <button
             onClick={() => navigate("/customer/shop")}
@@ -395,42 +395,6 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
             </div>
             <span className="text-xs font-medium">Messages</span>
           </button>
-
-          <button
-            onClick={() => {
-              if (!user) {
-                setShowLoginModal(true);
-                return;
-              }
-              navigate("/customer/profile");
-            }}
-            className={`flex flex-col items-center justify-center gap-1 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-400/70 ${
-              isActive("/customer/profile")
-                ? "text-gold-300 bg-gold-500/15"
-                : "text-gray-400 hover:text-gold-300 hover:bg-white/5"
-            }`}
-          >
-            <User className="w-5 h-5" />
-            <span className="text-xs font-medium">Profile</span>
-          </button>
-
-          {user ? (
-            <button
-              onClick={handleLogout}
-              className="flex flex-col items-center justify-center gap-1 transition-all text-red-400 hover:text-red-300 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-300/70"
-            >
-              <LogOut className="w-5 h-5" />
-              <span className="text-xs font-medium">Logout</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => setShowLoginModal(true)}
-              className="flex flex-col items-center justify-center gap-1 transition-all text-gold-300 hover:text-gold-200 hover:bg-gold-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-300/70"
-            >
-              <LogIn className="w-5 h-5" />
-              <span className="text-xs font-medium">Login</span>
-            </button>
-          )}
         </div>
       </nav>
 

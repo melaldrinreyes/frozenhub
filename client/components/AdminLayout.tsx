@@ -160,7 +160,6 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
   const adminNavigation = [
     { label: "Dashboard", href: "/admin/dashboard", icon: Home },
     { label: "Catalogs", href: "/admin/catalogs", icon: BarChart3 },
-    { label: "Pricing", href: "/admin/pricing", icon: DollarSign },
     { label: "Promos", href: "/admin/promos", icon: Tag },
     { label: "Inventory", href: "/admin/inventory", icon: Package },
     { label: "Branches", href: "/admin/branches", icon: Package },
@@ -315,8 +314,8 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-black border-t border-gold-500/20 z-50">
         <div className="flex items-center justify-around">
-          {/* First 4 navigation items */}
-          {navigation.slice(0, 4).map((item) => {
+          {/* First 3 navigation items + Messages */}
+          {navigation.slice(0, 3).map((item) => {
             const isActive = location.pathname === item.href;
             const showOrderBadge = item.label === "Online Orders" && newOrdersCount > 0;
             const showTransferBadge = 
@@ -345,6 +344,36 @@ export default function AdminLayout({ children, userRole, title }: AdminLayoutPr
               </Link>
             );
           })}
+          
+          {/* Messages button (always show as 4th item) */}
+          {(() => {
+            const messagesItem = navigation.find(item => item.label === "Messages");
+            if (!messagesItem) return null;
+            
+            const isActive = location.pathname === messagesItem.href;
+            const MessagesIcon = messagesItem.icon;
+            
+            return (
+              <Link
+                key={messagesItem.href}
+                to={messagesItem.href}
+                onClick={() => setActiveNavItem("messages")}
+                className={`flex flex-col items-center justify-center gap-1 transition-colors py-2 flex-1 relative ${
+                  isActive
+                    ? "text-gold-400 bg-gold-500/10" 
+                    : "text-gray-400 hover:text-gold-400 hover:bg-gold-500/5"
+                }`}
+              >
+                <MessagesIcon className="w-5 h-5" />
+                <span className="text-xs font-medium">Messages</span>
+                {unreadMessagesCount > 0 && (
+                  <Badge className="absolute top-1 right-4 bg-blue-500 text-white text-xs px-1.5 py-0 min-w-[18px] h-[18px] flex items-center justify-center rounded-full animate-pulse">
+                    {unreadMessagesCount}
+                  </Badge>
+                )}
+              </Link>
+            );
+          })()}
 
           {/* More dropdown for remaining items */}
           <DropdownMenu>
