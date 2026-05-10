@@ -422,6 +422,7 @@ async function ensureSchema(connection: PgConnection) {
       google_id TEXT UNIQUE,
       role TEXT NOT NULL CHECK (role IN ('admin', 'branch_admin', 'pos_operator', 'customer', 'rider')),
       branch_id TEXT NULL REFERENCES branches(id) ON DELETE SET NULL,
+      disabled BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
     `CREATE TABLE IF NOT EXISTS categories (
@@ -894,6 +895,7 @@ export async function initializeDatabase() {
         google_id VARCHAR(255) NULL,
         role ENUM('admin', 'branch_admin', 'pos_operator', 'customer', 'rider') NOT NULL,
         branch_id VARCHAR(255),
+        disabled TINYINT(1) DEFAULT 0,
         created_at DATETIME NOT NULL,
         INDEX idx_email (email),
         INDEX idx_role (role),
@@ -1443,6 +1445,20 @@ async function runMigrations(connection: mysql.PoolConnection) {
       console.log("  ✅ Rider assignment table updated");
     } catch (error: any) {
       console.error("  ⚠️  Rider assignment migration error:", error.message);
+    }
+
+    // Migration 6: Add disabled column to users table
+    try {
+      const [disabledColumns] = await connection.query(`SHOW COLUMNS FROM users LIKE 'disabled'`);
+      if ((disabledColumns as any[]).length === 0) {
+        await connection.query(`
+          ALTER TABLE users 
+          ADD COLUMN disabled TINYINT(1) DEFAULT 0 COMMENT 'User account disabled status'
+        `);
+        console.log("  ✅ Users table: added disabled column");
+      }
+    } catch (error: any) {
+      console.error("  ⚠️  Users table disabled column migration error:", error.message);
     }
 
     // Migration 5: Update existing records

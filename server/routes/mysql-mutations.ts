@@ -1326,6 +1326,7 @@ export const handleGetUsersMySQL: RequestHandler = async (req, res) => {
     const [rows] = await connection.query(
       `SELECT u.id, u.name, u.email, u.phone, u.role,
               ${branchExpr} as branch_id,
+              u.disabled,
               u.created_at,
               b.name as branch_name
        FROM users u
@@ -1403,7 +1404,7 @@ export const handleCreateUserMySQL: RequestHandler = async (req, res) => {
 
 export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
   const { id } = req.params;
-  const { name, email, phone, role, branch_id, branchId, password } = req.body || {};
+  const { name, email, phone, role, branch_id, branchId, password, disabled } = req.body || {};
   const normalizedBranchId = branch_id !== undefined ? branch_id : branchId;
 
   const updates: string[] = [];
@@ -1433,6 +1434,10 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
   if (normalizedBranchId !== undefined) {
     updates.push("branch_id = ?");
     values.push(normalizedBranchId || null);
+  }
+  if (disabled !== undefined) {
+    updates.push("disabled = ?");
+    values.push(!!disabled);
   }
   if (password !== undefined && String(password).trim().length > 0) {
     const passwordHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
@@ -1470,6 +1475,7 @@ export const handleUpdateUserMySQL: RequestHandler = async (req, res) => {
     const [rows] = await connection.query(
       `SELECT u.id, u.name, u.email, u.phone, u.role,
               u.branch_id,
+              u.disabled,
               u.created_at
        FROM users u
        WHERE u.id = ?

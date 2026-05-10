@@ -135,6 +135,7 @@ import {
   handleGetActivityLogs,
   handleGetActivityStats,
   handleGetRecentActivity,
+  handleDeleteActivityLog,
 } from "./routes/activity-logs";
 import {
   handleLoginMySQL,
@@ -561,9 +562,11 @@ export function createServer() {
   app.get("/api/activity-logs", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleGetActivityLogs);
   app.get("/api/activity-logs/stats", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleGetActivityStats);
   app.get("/api/activity-logs/recent", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleGetRecentActivity);
+  app.delete("/api/activity-logs/:id", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleDeleteActivityLog);
   app.get("/api/audit-logs", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleGetActivityLogs);
   app.get("/api/audit-logs/stats", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleGetActivityStats);
   app.get("/api/audit-logs/recent", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleGetRecentActivity);
+  app.delete("/api/audit-logs/:id", requireAuth, requireRole("admin", "branch_admin"), apiRateLimiter, handleDeleteActivityLog);
 
   // Serve static files in production only (not in serverless)
   // Note: isServerless is already defined earlier in the function

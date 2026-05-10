@@ -190,6 +190,14 @@ export const handleLoginMySQL: RequestHandler = async (req, res) => {
       return;
     }
 
+    // Check if user account is disabled
+    if (user.disabled) {
+      res.status(403).json({ 
+        error: "Your account has been disabled. Please contact an administrator." 
+      });
+      return;
+    }
+
     const authUser: AuthUser = {
       id: user.id,
       name: user.name,

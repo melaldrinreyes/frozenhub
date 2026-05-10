@@ -109,11 +109,38 @@ function formatActionLabel(action: string) {
   return actionLabels[action] || toTitleCase(action);
 }
 
+function decodeBase64Description(description: unknown): string {
+  const value = description == null ? "" : String(description).trim();
+  if (!value) return "";
+  
+  // Check if it looks like base64 (only contains base64 characters and is reasonably long)
+  const base64Regex = /^[A-Za-z0-9+/]+=*$/;
+  if (value.length > 20 && base64Regex.test(value)) {
+    try {
+      // Try to decode as base64
+      const decoded = atob(value);
+      // Check if decoded string is valid UTF-8 and readable
+      if (decoded && /^[\x20-\x7E\s]*$/.test(decoded)) {
+        return decoded;
+      }
+    } catch (e) {
+      // If decoding fails, return original value
+      return value;
+    }
+  }
+  
+  return value;
+}
+
 function formatMetadataValue(value: unknown) {
   if (value === null || value === undefined || value === "") return "-";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
+  
+  // Decode base64 if it's a string
+  const stringValue = String(value);
+  const decoded = decodeBase64Description(stringValue);
+  return decoded;
 }
 
 function formatMetadataSummary(metadata: unknown) {
@@ -127,9 +154,14 @@ function formatMetadataSummary(metadata: unknown) {
 }
 
 function renderDescriptionDots(description: unknown) {
-  const value = description == null ? "" : String(description).trim();
-  if (!value) return "-";
-  return value.length > 140 ? "...." : value;
+  const decoded = decodeBase64Description(description);
+  if (!decoded) return "-";
+  return decoded.length > 140 ? "...." : decoded;
+}
+
+function getFullDescription(description: unknown): string {
+  const decoded = decodeBase64Description(description);
+  return decoded || "-";
 }
 
 function csvEscape(value: unknown) {
@@ -255,7 +287,7 @@ export default function AuditLogs() {
       toTitleCase(log.entity_type),
       log.entity_name || "-",
       log.branch_name || log.branch_id || "All Branches",
-      log.description || "-",
+      getFullDescription(log.description),
       JSON.stringify(log.metadata || {}),
     ]);
 
@@ -741,7 +773,7 @@ export default function AuditLogs() {
 
                   <div>
                     <div className="text-xs text-slate-500">Description</div>
-                    <div className="whitespace-pre-wrap mt-1 text-sm text-slate-800">{selectedLog.description || "-"}</div>
+                    <div className="whitespace-pre-wrap mt-1 text-sm text-slate-800">{getFullDescription(selectedLog.description)}</div>
                   </div>
 
                   {formatMetadataSummary(selectedLog.metadata) && (

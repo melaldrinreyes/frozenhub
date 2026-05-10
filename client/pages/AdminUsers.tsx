@@ -41,9 +41,12 @@ import {
   Phone,
   Building,
   Calendar,
+  Ban,
+  CheckCircle,
 } from "lucide-react";
 import { filterBySearch, paginateItems } from "@/lib/dataManager";
 import { apiClient } from "@/lib/apiClient";
+import { useToast } from "@/hooks/use-toast";
 
 const ROLES = [
   { value: "admin", label: "Administrator" },
@@ -54,6 +57,7 @@ const ROLES = [
 
 export default function AdminUsers() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -70,7 +74,7 @@ export default function AdminUsers() {
   const [password, setPassword] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<
     | {
-        type: "delete-user";
+        type: "delete-user" | "disable-user" | "enable-user";
         user: any;
       }
     | null
@@ -133,6 +137,31 @@ export default function AdminUsers() {
     },
     onError: (error: any) => {
       alert(error.message || "Failed to delete user");
+    },
+  });
+
+  // Disable/Enable user mutation
+  const toggleUserStatusMutation = useMutation({
+    mutationFn: ({ id, disabled }: { id: string; disabled: boolean }) =>
+      apiClient.updateUser(id, { disabled }),
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      
+      // Show success toast
+      toast({
+        title: variables.disabled ? "User Disabled" : "User Enabled",
+        description: variables.disabled 
+          ? "The user account has been disabled and cannot log in."
+          : "The user account has been enabled and can now log in.",
+        variant: "default",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update user status",
+        variant: "destructive",
+      });
     },
   });
 
@@ -224,11 +253,26 @@ export default function AdminUsers() {
     setConfirmDialog({ type: "delete-user", user: targetUser });
   };
 
+  const handleToggleUserStatus = (user: any) => {
+    const action = user.disabled ? "enable-user" : "disable-user";
+    setConfirmDialog({ type: action, user });
+  };
+
   const handleConfirmDialogAction = () => {
     if (!confirmDialog) return;
 
     if (confirmDialog.type === "delete-user") {
       deleteUserMutation.mutate(confirmDialog.user.id);
+    } else if (confirmDialog.type === "disable-user") {
+      toggleUserStatusMutation.mutate({ 
+        id: confirmDialog.user.id, 
+        disabled: true 
+      });
+    } else if (confirmDialog.type === "enable-user") {
+      toggleUserStatusMutation.mutate({ 
+        id: confirmDialog.user.id, 
+        disabled: false 
+      });
     }
 
     setConfirmDialog(null);
@@ -517,9 +561,16 @@ export default function AdminUsers() {
                             {user.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-bold text-slate-900 text-base mb-1 truncate">
-                              {user.name}
-                            </h3>
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-bold text-slate-900 text-base truncate">
+                                {user.name}
+                              </h3>
+                              {user.disabled && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800 flex-shrink-0">
+                                  Disabled
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-1.5 text-slate-600 mb-1">
                               <Mail className="w-3.5 h-3.5 flex-shrink-0" />
                               <p className="text-xs truncate">{user.email}</p>
@@ -539,6 +590,19 @@ export default function AdminUsers() {
                             title="Edit user"
                           >
                             <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleToggleUserStatus(user)}
+                            className={`h-9 w-9 p-0 ${
+                              user.disabled 
+                                ? "text-green-600 hover:text-green-700 hover:bg-green-50" 
+                                : "text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                            }`}
+                            title={user.disabled ? "Enable user" : "Disable user"}
+                          >
+                            {user.disabled ? <CheckCircle className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
                           </Button>
                           <Button
                             size="sm"
@@ -625,7 +689,14 @@ export default function AdminUsers() {
                       className="border-b border-slate-100 hover:bg-slate-50"
                     >
                       <td className="py-3 px-4 font-semibold text-slate-900">
-                        {user.name}
+                        <div className="flex items-center gap-2">
+                          {user.name}
+                          {user.disabled && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800">
+                              Disabled
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4 text-slate-600">{user.email}</td>
                       <td className="py-3 px-4 text-slate-600">{user.phone}</td>
@@ -647,14 +718,29 @@ export default function AdminUsers() {
                             variant="ghost"
                             onClick={() => handleOpenDialog(user)}
                             className="h-8 w-8 p-0"
+                            title="Edit user"
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
                           <Button
                             size="sm"
                             variant="ghost"
+                            onClick={() => handleToggleUserStatus(user)}
+                            className={`h-8 w-8 p-0 ${
+                              user.disabled 
+                                ? "text-green-600 hover:text-green-700 hover:bg-green-50" 
+                                : "text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                            }`}
+                            title={user.disabled ? "Enable user" : "Disable user"}
+                          >
+                            {user.disabled ? <CheckCircle className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
                             className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
                             onClick={() => handleDeleteUser(user.id)}
+                            title="Delete user"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -708,15 +794,38 @@ export default function AdminUsers() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete User</AlertDialogTitle>
+            <AlertDialogTitle>
+              {confirmDialog?.type === "delete-user" && "Delete User"}
+              {confirmDialog?.type === "disable-user" && "Disable User"}
+              {confirmDialog?.type === "enable-user" && "Enable User"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {`Are you sure you want to delete user ${confirmDialog?.user?.name}? This action cannot be undone.`}
+              {confirmDialog?.type === "delete-user" && 
+                `Are you sure you want to delete user ${confirmDialog?.user?.name}? This action cannot be undone.`
+              }
+              {confirmDialog?.type === "disable-user" && 
+                `Are you sure you want to disable user ${confirmDialog?.user?.name}? They will not be able to log in until re-enabled.`
+              }
+              {confirmDialog?.type === "enable-user" && 
+                `Are you sure you want to enable user ${confirmDialog?.user?.name}? They will be able to log in again.`
+              }
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDialogAction} className="bg-red-600 hover:bg-red-700">
-              Delete User
+            <AlertDialogAction 
+              onClick={handleConfirmDialogAction} 
+              className={
+                confirmDialog?.type === "delete-user" 
+                  ? "bg-red-600 hover:bg-red-700" 
+                  : confirmDialog?.type === "disable-user"
+                  ? "bg-orange-600 hover:bg-orange-700"
+                  : "bg-green-600 hover:bg-green-700"
+              }
+            >
+              {confirmDialog?.type === "delete-user" && "Delete User"}
+              {confirmDialog?.type === "disable-user" && "Disable User"}
+              {confirmDialog?.type === "enable-user" && "Enable User"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

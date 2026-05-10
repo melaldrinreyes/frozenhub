@@ -314,3 +314,41 @@ export const handleGetRecentActivity: RequestHandler = async (req, res) => {
     connection.release();
   }
 };
+
+export const handleDeleteActivityLog: RequestHandler = async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ error: "Log ID is required" });
+    }
+
+    // Check if log exists and user has permission to delete it
+    const [rows] = await connection.query(
+      `SELECT branch_id FROM activity_logs WHERE id = ?`,
+      [id]
+    );
+
+    if ((rows as any[]).length === 0) {
+      return res.status(404).json({ error: "Log not found" });
+    }
+
+    const log = (rows as any[])[0];
+
+    // Branch admins can only delete logs from their own branch
+    if (req.user?.role === "branch_admin" && log.branch_id !== req.user?.branch_id) {
+      return res.status(403).json({ error: "You can only delete logs from your own branch" });
+    }
+
+    // Delete the log
+    await connection.query(`DELETE FROM activity_logs WHERE id = ?`, [id]);
+
+    res.json({ success: true, message: "Log deleted successfully" });
+  } catch (error) {
+    console.error("Delete activity log error:", error);
+    res.status(500).json({ error: "Failed to delete activity log" });
+  } finally {
+    connection.release();
+  }
+};
