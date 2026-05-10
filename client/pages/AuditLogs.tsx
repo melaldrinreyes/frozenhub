@@ -326,7 +326,7 @@ export default function AuditLogs() {
 
   return (
     <AdminLayout userRole={isAdmin ? "admin" : "branch"}>
-      <div className="space-y-6 print:space-y-4">
+      <div className="space-y-6 print:space-y-4 pb-20 md:pb-6">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3">
             <div className="p-3 rounded-2xl bg-gold-500/10 border border-gold-500/20">
