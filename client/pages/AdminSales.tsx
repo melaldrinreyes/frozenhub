@@ -94,15 +94,23 @@ export default function AdminSales() {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
         status: "all", // Get all sales regardless of status
+        page: "1",
+        limit: "1000", // Get more records for admin view
       });
       
       if (selectedBranch !== "all") {
         params.append("branchId", selectedBranch);
       }
       
-      const response = await fetch(`/api/sales?${params}`);
-      if (!response.ok) throw new Error("Failed to fetch sales data");
-      return response.json();
+      const response = await apiClient.getSales(
+        selectedBranch !== "all" ? selectedBranch : undefined,
+        dateRange.startDate,
+        dateRange.endDate,
+        1,
+        1000,
+        "all"
+      );
+      return response;
     },
   });
 
@@ -110,18 +118,12 @@ export default function AdminSales() {
   const { data: statsData, isLoading: statsLoading } = useQuery({
     queryKey: ["adminSalesStats", dateRange, selectedBranch],
     queryFn: async () => {
-      const params = new URLSearchParams({
-        startDate: dateRange.startDate,
-        endDate: dateRange.endDate,
-      });
-      
-      if (selectedBranch !== "all") {
-        params.append("branchId", selectedBranch);
-      }
-      
-      const response = await fetch(`/api/sales/stats?${params}`);
-      if (!response.ok) throw new Error("Failed to fetch sales stats");
-      return response.json();
+      const response = await apiClient.getSalesStats(
+        selectedBranch !== "all" ? selectedBranch : undefined,
+        dateRange.startDate,
+        dateRange.endDate
+      );
+      return response;
     },
   });
 
