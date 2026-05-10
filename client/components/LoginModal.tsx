@@ -14,9 +14,11 @@ interface LoginModalProps {
 
 
 export default function LoginModal({ onClose }: LoginModalProps) {
-  const [tab, setTab] = useState<"signin" | "signup">("signin");
+  const [tab, setTab] = useState<"signin" | "signup" | "forgot-password" | "reset-password">("signin");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [resetToken, setResetToken] = useState("");
   const navigate = useNavigate();
   const { login, signup } = useAuth();
 
@@ -32,6 +34,15 @@ export default function LoginModal({ onClose }: LoginModalProps) {
     email: "",
     phone: "",
     password: "",
+    confirmPassword: "",
+  });
+
+  // Forgot password form
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
+
+  // Reset password form
+  const [resetPasswordData, setResetPasswordData] = useState({
+    newPassword: "",
     confirmPassword: "",
   });
 
@@ -118,13 +129,92 @@ export default function LoginModal({ onClose }: LoginModalProps) {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotPasswordEmail }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to send reset email");
+      }
+
+      setSuccess("Password reset instructions have been sent to your email.");
+      setForgotPasswordEmail("");
+    } catch (err: any) {
+      setError(err.message || "An error occurred. Please try again.");
+      console.error("Forgot password error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (resetPasswordData.newPassword !== resetPasswordData.confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    if (resetPasswordData.newPassword.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: resetToken,
+          newPassword: resetPasswordData.newPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to reset password");
+      }
+
+      setSuccess("Password reset successfully! You can now sign in with your new password.");
+      setResetPasswordData({ newPassword: "", confirmPassword: "" });
+      setTimeout(() => {
+        setTab("signin");
+        setSuccess("");
+      }, 2000);
+    } catch (err: any) {
+      setError(err.message || "An error occurred. Please try again.");
+      console.error("Reset password error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
           <div>
             <CardTitle className="text-2xl">
-              {tab === "signin" ? "Sign In" : "Create Account"}
+              {tab === "signin" && "Sign In"}
+              {tab === "signup" && "Create Account"}
+              {tab === "forgot-password" && "Forgot Password"}
+              {tab === "reset-password" && "Reset Password"}
             </CardTitle>
           </div>
           <button
@@ -138,76 +228,107 @@ export default function LoginModal({ onClose }: LoginModalProps) {
         </CardHeader>
 
         <CardContent className="space-y-6 pt-6">
-          {/* Tabs */}
-          <div className="flex gap-2 border-b border-slate-200">
+          {/* Tabs - Only show for signin/signup */}
+          {(tab === "signin" || tab === "signup") && (
+            <div className="flex gap-2 border-b border-slate-200">
+              <button
+                onClick={() => {
+                  setTab("signin");
+                  setError("");
+                  setSuccess("");
+                }}
+                className={`flex-1 py-3 font-semibold transition-colors border-b-2 ${
+                  tab === "signin"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <LogIn className="w-4 h-4 inline mr-2" />
+                Sign In
+              </button>
+              <button
+                onClick={() => {
+                  setTab("signup");
+                  setError("");
+                  setSuccess("");
+                }}
+                className={`flex-1 py-3 font-semibold transition-colors border-b-2 ${
+                  tab === "signup"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <UserPlus className="w-4 h-4 inline mr-2" />
+                Sign Up
+              </button>
+            </div>
+          )}
+
+          {/* Back button for forgot/reset password */}
+          {(tab === "forgot-password" || tab === "reset-password") && (
             <button
               onClick={() => {
                 setTab("signin");
                 setError("");
+                setSuccess("");
               }}
-              className={`flex-1 py-3 font-semibold transition-colors border-b-2 ${
-                tab === "signin"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-slate-600 hover:text-slate-900"
-              }`}
+              className="text-sm text-slate-600 hover:text-slate-900 flex items-center gap-2"
             >
-              <LogIn className="w-4 h-4 inline mr-2" />
-              Sign In
+              ← Back to Sign In
             </button>
-            <button
-              onClick={() => {
-                setTab("signup");
-                setError("");
-              }}
-              className={`flex-1 py-3 font-semibold transition-colors border-b-2 ${
-                tab === "signup"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <UserPlus className="w-4 h-4 inline mr-2" />
-              Sign Up
-            </button>
-          </div>
+          )}
 
-          <div className="text-xs uppercase text-slate-500 text-center">Continue with email</div>
+          {/* Google Sign In - Only show for signin/signup */}
+          {(tab === "signin" || tab === "signup") && (
+            <>
+              <div className="text-xs uppercase text-slate-500 text-center">Continue with email</div>
 
-          <div className="space-y-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleGoogleSignIn}
-              disabled={loading}
-              className="w-full h-12 justify-center gap-3 border-slate-200 bg-gradient-to-r from-white via-slate-50 to-white text-slate-800 shadow-sm hover:shadow-md hover:border-slate-300 hover:from-slate-50 hover:to-slate-100 transition-all duration-200"
-            >
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white ring-1 ring-slate-200">
-                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
-                  <path
-                    fill="#EA4335"
-                    d="M12 10.2v3.9h5.5c-.2 1.2-.9 2.2-1.9 2.9l3.1 2.4c1.8-1.7 2.8-4.1 2.8-6.9 0-.6-.1-1.1-.2-1.7H12z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 22c2.5 0 4.7-.8 6.3-2.3l-3.1-2.4c-.9.6-2 .9-3.2.9-2.5 0-4.7-1.7-5.4-4l-3.2 2.5C4.9 19.8 8.2 22 12 22z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M6.6 14.2c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2L3.4 7.7C2.8 8.9 2.5 10 2.5 12s.3 3.1.9 4.3l3.2-2.1z"
-                  />
-                  <path
-                    fill="#4285F4"
-                    d="M12 5.8c1.4 0 2.7.5 3.7 1.4l2.8-2.8C16.7 2.8 14.5 2 12 2 8.2 2 4.9 4.2 3.4 7.7l3.2 2.5c.7-2.3 2.9-4 5.4-4z"
-                  />
-                </svg>
-              </span>
-              <span className="font-semibold tracking-wide">
-                {loading ? "Redirecting to Google..." : "Sign in with Google"}
-              </span>
-            </Button>
-            <p className="text-xs text-center text-slate-500">
-              Secure Google login. A customer account will be created automatically if needed.
-            </p>
-          </div>
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleGoogleSignIn}
+                  disabled={loading}
+                  className="w-full h-12 justify-center gap-3 border-slate-200 bg-gradient-to-r from-white via-slate-50 to-white text-slate-800 shadow-sm hover:shadow-md hover:border-slate-300 hover:from-slate-50 hover:to-slate-100 transition-all duration-200"
+                >
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white ring-1 ring-slate-200">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+                      <path
+                        fill="#EA4335"
+                        d="M12 10.2v3.9h5.5c-.2 1.2-.9 2.2-1.9 2.9l3.1 2.4c1.8-1.7 2.8-4.1 2.8-6.9 0-.6-.1-1.1-.2-1.7H12z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 22c2.5 0 4.7-.8 6.3-2.3l-3.1-2.4c-.9.6-2 .9-3.2.9-2.5 0-4.7-1.7-5.4-4l-3.2 2.5C4.9 19.8 8.2 22 12 22z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M6.6 14.2c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2L3.4 7.7C2.8 8.9 2.5 10 2.5 12s.3 3.1.9 4.3l3.2-2.1z"
+                      />
+                      <path
+                        fill="#4285F4"
+                        d="M12 5.8c1.4 0 2.7.5 3.7 1.4l2.8-2.8C16.7 2.8 14.5 2 12 2 8.2 2 4.9 4.2 3.4 7.7l3.2 2.5c.7-2.3 2.9-4 5.4-4z"
+                      />
+                    </svg>
+                  </span>
+                  <span className="font-semibold tracking-wide">
+                    {loading ? "Redirecting to Google..." : "Sign in with Google"}
+                  </span>
+                </Button>
+                <p className="text-xs text-center text-slate-500">
+                  Secure Google login. A customer account will be created automatically if needed.
+                </p>
+              </div>
+            </>
+          )}
+
+          {/* Success Message */}
+          {success && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex gap-3">
+              <AlertCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <p className="text-green-800 text-sm">{success}</p>
+            </div>
+          )}
 
           {/* Error Message */}
           {error && (
@@ -255,6 +376,34 @@ export default function LoginModal({ onClose }: LoginModalProps) {
               >
                 {loading ? "Signing in..." : "Sign In"}
               </Button>
+
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab("forgot-password");
+                    setError("");
+                    setSuccess("");
+                  }}
+                  className="text-sm text-slate-600 hover:text-slate-900 hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </div>
+
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab("reset-password");
+                    setError("");
+                    setSuccess("");
+                  }}
+                  className="text-xs text-slate-500 hover:text-slate-700 hover:underline"
+                >
+                  Have a reset token?
+                </button>
+              </div>
             </form>
           )}
 
@@ -340,6 +489,98 @@ export default function LoginModal({ onClose }: LoginModalProps) {
                 disabled={loading}
               >
                 {loading ? "Creating account..." : "Create Account"}
+              </Button>
+            </form>
+          )}
+
+          {/* Forgot Password Form */}
+          {tab === "forgot-password" && (
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <p className="text-sm text-slate-600">
+                Enter your email address and we'll send you instructions to reset your password.
+              </p>
+
+              <div className="space-y-2">
+                <Label htmlFor="forgot-email">Email</Label>
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  placeholder="your.email@example.com"
+                  value={forgotPasswordEmail}
+                  onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full bg-gold-500 hover:bg-gold-600 text-black font-medium shadow-md hover:shadow-lg transition-all duration-200"
+                disabled={loading}
+              >
+                {loading ? "Sending..." : "Send Reset Instructions"}
+              </Button>
+            </form>
+          )}
+
+          {/* Reset Password Form */}
+          {tab === "reset-password" && (
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <p className="text-sm text-slate-600">
+                Enter your new password below.
+              </p>
+
+              <div className="space-y-2">
+                <Label htmlFor="reset-token">Reset Token</Label>
+                <Input
+                  id="reset-token"
+                  type="text"
+                  placeholder="Enter the token from your email"
+                  value={resetToken}
+                  onChange={(e) => setResetToken(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="new-password">New Password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={resetPasswordData.newPassword}
+                  onChange={(e) =>
+                    setResetPasswordData({
+                      ...resetPasswordData,
+                      newPassword: e.target.value,
+                    })
+                  }
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirm-new-password">Confirm New Password</Label>
+                <Input
+                  id="confirm-new-password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={resetPasswordData.confirmPassword}
+                  onChange={(e) =>
+                    setResetPasswordData({
+                      ...resetPasswordData,
+                      confirmPassword: e.target.value,
+                    })
+                  }
+                  required
+                />
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full bg-gold-500 hover:bg-gold-600 text-black font-medium shadow-md hover:shadow-lg transition-all duration-200"
+                disabled={loading}
+              >
+                {loading ? "Resetting..." : "Reset Password"}
               </Button>
             </form>
           )}

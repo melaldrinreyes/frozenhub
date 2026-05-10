@@ -5,6 +5,7 @@ import { AuthUser } from "../middleware/auth";
 import { generateToken } from "../middleware/jwt";
 import { logActivity } from "./activity-logs";
 import { consumeInventoryFifo, recordSaleItemBatchAllocations } from "../utils/inventory-fifo";
+import { sendPasswordResetEmail } from "../utils/email";
 import fs from "fs";
 import path from "path";
 
@@ -356,6 +357,275 @@ export const handleSignupMySQL: RequestHandler = async (req, res) => {
     res.status(201).json({ user: authUser });
   } catch (error) {
     logSqlProviderError("Supabase/Postgres signup error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    connection?.release();
+  }
+};
+
+// Forgot Password - Generate reset token
+export const handleForgotPasswordMySQL: RequestHandler = async (req, res) => {
+  console.log("=== FORGOT PASSWORD ENDPOINT HIT ===");
+  console.log("Request body:", req.body);
+  
+  const { email } = req.body;
+
+  if (!email) {
+    console.log("ERROR: Email is missing");
+    res.status(400).json({ error: "Email is required" });
+    return;
+  }
+
+  let connection;
+  try {
+    console.log("Getting database connection...");
+    connection = await getConnection();
+    console.log("Database connection established");
+    
+    console.log("Forgot password request for email:", email);
+    
+    // Check if user exists
+    console.log("Querying for user...");
+    const [userRows] = await connection.query(
+      "SELECT id, name, email FROM users WHERE email = $1 LIMIT 1",
+      [email]
+    );
+
+    console.log("User lookup result:", (userRows as any[]).length > 0 ? "User found" : "User not found");
+
+    // Always return success to prevent email enumeration
+    if ((userRows as any[]).length === 0) {
+      console.log("User not found, returning generic success message");
+      res.json({ message: "If an account exists with this email, you will receive password reset instructions." });
+      return;
+    }
+
+    const user = (userRows as any[])[0];
+    console.log("Generating token for user:", user.id);
+    
+    // Generate a random 6-character token
+    const token = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const expiresAt = new Date(Date.now() + 3600000); // 1 hour from now
+
+    console.log("Token generated:", token, "Expires at:", expiresAt);
+
+    // Store the token in the database
+    try {
+      console.log("Inserting token into database...");
+      await connection.query(
+        `INSERT INTO password_reset_tokens (user_id, token, expires_at, created_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (user_id) 
+         DO UPDATE SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, created_at = NOW()`,
+        [user.id, token, expiresAt]
+      );
+      console.log("Token inserted successfully");
+    } catch (dbError: any) {
+      console.error("Database error creating reset token:", dbError);
+      // If table doesn't exist, create it
+      if (dbError.code === 'ER_NO_SUCH_TABLE' || dbError.message?.includes('password_reset_tokens')) {
+        console.log("Creating password_reset_tokens table...");
+        await connection.query(`
+          CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL UNIQUE,
+            token VARCHAR(10) NOT NULL,
+            expires_at TIMESTAMP NOT NULL,
+            used BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+          )
+        `);
+        await connection.query(`CREATE INDEX IF NOT EXISTS idx_password_reset_token ON password_reset_tokens(token)`);
+        await connection.query(`CREATE INDEX IF NOT EXISTS idx_password_reset_expires ON password_reset_tokens(expires_at)`);
+        console.log("Table created, retrying insert...");
+        
+        // Retry the insert
+        await connection.query(
+          `INSERT INTO password_reset_tokens (user_id, token, expires_at, created_at)
+           VALUES ($1, $2, $3, NOW())
+           ON CONFLICT (user_id) 
+           DO UPDATE SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, created_at = NOW()`,
+          [user.id, token, expiresAt]
+        );
+        console.log("Token inserted successfully after table creation");
+      } else {
+        throw dbError;
+      }
+    }
+
+    // Log activity (non-blocking)
+    try {
+      console.log("Logging activity...");
+      await logActivity(connection, {
+        userId: user.id,
+        userName: user.name,
+        userRole: null,
+        action: "PASSWORD_RESET_REQUESTED",
+        entityType: "auth",
+        entityId: user.id,
+        entityName: user.name,
+        description: `Password reset requested for ${user.email}`,
+        metadata: { email: user.email },
+        ipAddress: req.ip || null,
+        branchId: null,
+      });
+      console.log("Activity logged successfully");
+    } catch (logError) {
+      console.error("Failed to log password reset activity:", logError);
+      // Continue anyway - logging failure shouldn't break the feature
+    }
+
+    // Send password reset email
+    console.log("Sending password reset email...");
+    const emailResult = await sendPasswordResetEmail({
+      to: user.email,
+      token,
+      userName: user.name,
+    });
+
+    if (emailResult.success) {
+      console.log(`✅ Password reset email sent successfully to ${email}`);
+    } else {
+      console.warn(`⚠️  Email not sent: ${emailResult.error}`);
+      // In development, log the token to console as fallback
+      if (process.env.NODE_ENV === "development") {
+        console.log(`📧 Password reset token for ${email}: ${token}`);
+      }
+    }
+    
+    const response = { 
+      message: "If an account exists with this email, you will receive password reset instructions.",
+      // In development, include the token in the response as fallback
+      ...(process.env.NODE_ENV === "development" && !emailResult.success && { token })
+    };
+    
+    console.log("Sending response:", response);
+    res.json(response);
+  } catch (error) {
+    console.error("❌ FORGOT PASSWORD ERROR:", error);
+    console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
+    console.error("Error details:", JSON.stringify(error, null, 2));
+    logSqlProviderError("Forgot password error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    if (connection) {
+      console.log("Releasing database connection");
+      connection.release();
+    }
+  }
+};
+
+// Reset Password - Verify token and update password
+export const handleResetPasswordMySQL: RequestHandler = async (req, res) => {
+  const { token, newPassword } = req.body;
+
+  if (!token || !newPassword) {
+    res.status(400).json({ error: "Token and new password are required" });
+    return;
+  }
+
+  if (newPassword.length < 6) {
+    res.status(400).json({ error: "Password must be at least 6 characters" });
+    return;
+  }
+
+  let connection;
+  try {
+    connection = await getConnection();
+    
+    // Find valid token
+    let tokenRows;
+    try {
+      [tokenRows] = await connection.query(
+        `SELECT user_id, expires_at FROM password_reset_tokens 
+         WHERE token = $1 AND expires_at > NOW() AND used = FALSE
+         LIMIT 1`,
+        [token]
+      );
+    } catch (dbError: any) {
+      // If table doesn't exist, create it and return error (token won't exist anyway)
+      if (dbError.code === '42P01' || dbError.message?.includes('password_reset_tokens')) {
+        console.log("Creating password_reset_tokens table...");
+        await connection.query(`
+          CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL UNIQUE,
+            token VARCHAR(10) NOT NULL,
+            expires_at TIMESTAMP NOT NULL,
+            used BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+          )
+        `);
+        await connection.query(`CREATE INDEX IF NOT EXISTS idx_password_reset_token ON password_reset_tokens(token)`);
+        await connection.query(`CREATE INDEX IF NOT EXISTS idx_password_reset_expires ON password_reset_tokens(expires_at)`);
+        res.status(400).json({ error: "Invalid or expired reset token" });
+        return;
+      }
+      throw dbError;
+    }
+
+    if ((tokenRows as any[]).length === 0) {
+      res.status(400).json({ error: "Invalid or expired reset token" });
+      return;
+    }
+
+    const resetToken = (tokenRows as any[])[0];
+    const userId = resetToken.user_id;
+
+    // Get user details
+    const [userRows] = await connection.query(
+      "SELECT id, name, email FROM users WHERE id = $1 LIMIT 1",
+      [userId]
+    );
+
+    if ((userRows as any[]).length === 0) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const user = (userRows as any[])[0];
+
+    // Hash new password
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+
+    // Update password
+    await connection.query(
+      "UPDATE users SET password_hash = $1 WHERE id = $2",
+      [passwordHash, userId]
+    );
+
+    // Mark token as used
+    await connection.query(
+      "UPDATE password_reset_tokens SET used = TRUE WHERE token = $1",
+      [token]
+    );
+
+    // Log activity (non-blocking)
+    try {
+      await logActivity(connection, {
+        userId: user.id,
+        userName: user.name,
+        userRole: null,
+        action: "PASSWORD_RESET_COMPLETED",
+        entityType: "auth",
+        entityId: user.id,
+        entityName: user.name,
+        description: `Password successfully reset for ${user.email}`,
+        metadata: { email: user.email },
+        ipAddress: req.ip || null,
+        branchId: null,
+      });
+    } catch (logError) {
+      console.error("Failed to log password reset completion:", logError);
+      // Continue anyway - logging failure shouldn't break the feature
+    }
+
+    res.json({ message: "Password reset successfully" });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    logSqlProviderError("Reset password error:", error);
     res.status(500).json({ error: "Internal server error" });
   } finally {
     connection?.release();

@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { getDiscountedPrice, getDiscountAmount } from "@/lib/discountUtils";
+import { apiClient } from "@/lib/apiClient";
 
 const JWT_TOKEN_KEY = "frozenhub_jwt_token";
 
@@ -90,7 +91,14 @@ export default function POSPage() {
   // Receipt state
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
-  // ...other state declarations...
+  // Recent History toggle state
+  const [showRecentHistory, setShowRecentHistory] = useState(false);
+  // Add stock modal state (for branch admins)
+  const [showAddStockModal, setShowAddStockModal] = useState(false);
+  const [addStockProduct, setAddStockProduct] = useState<Product | null>(null);
+  const [addStockQty, setAddStockQty] = useState<number>(1);
+  const [addStockUnitCost, setAddStockUnitCost] = useState<number | undefined>(undefined);
+  const [addStockReason, setAddStockReason] = useState<string>("");
   // Focus barcode input on mount and after every scan
   useEffect(() => {
     if (barcodeInputRef.current && typeof barcodeInputRef.current.focus === 'function') {
@@ -300,6 +308,38 @@ export default function POSPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  const addStockMutation = useMutation({
+    mutationFn: async (payload: { productId: string; branchId: string; quantity: number; unitCost?: number; reason?: string }) => {
+      return apiClient.addInventory({
+        product_id: payload.productId,
+        branch_id: payload.branchId,
+        quantity: payload.quantity,
+        unitCost: payload.unitCost,
+      });
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast({ title: "Stock added", description: "Inventory updated successfully" });
+      setShowAddStockModal(false);
+      setAddStockProduct(null);
+      setAddStockQty(1);
+      setAddStockUnitCost(undefined);
+      setAddStockReason("");
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed", description: err?.message || "Failed to add stock", variant: "destructive" });
+    },
+  });
+
+  const openAddStock = (product: Product) => {
+    setAddStockProduct(product);
+    setAddStockQty(1);
+    setAddStockUnitCost(undefined);
+    setAddStockReason("");
+    setShowAddStockModal(true);
+  };
+
 
   // Redirect non-POS operators
   useEffect(() => {
@@ -360,7 +400,6 @@ export default function POSPage() {
       return response.json();
     },
     enabled: !!user?.branch_id,
-    refetchInterval: 30 * 1000,
   });
 
   // Create sale mutation
@@ -690,6 +729,15 @@ export default function POSPage() {
                 <span>{new Date().toLocaleTimeString()}</span>
               </div>
               <Button
+                onClick={() => setShowRecentHistory(!showRecentHistory)}
+                size="sm"
+                className="bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-600 hover:to-gold-700 text-black font-semibold px-3 py-2 text-xs sm:text-sm"
+              >
+                <Clock className="w-4 h-4 sm:mr-1" />
+                <span className="hidden sm:inline">{showRecentHistory ? 'Hide' : 'Show'} History</span>
+                <span className="sm:hidden">{showRecentHistory ? 'Hide' : 'Show'}</span>
+              </Button>
+              <Button
                 onClick={handleLogout}
                 variant="outline"
                 size="sm"
@@ -858,6 +906,17 @@ export default function POSPage() {
                             {product.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
                           </span>
                         </Button>
+                        {(user?.role === 'branch_admin' || user?.role === 'admin') && (
+                          <Button
+                            onClick={() => openAddStock(product)}
+                            size="sm"
+                            variant="outline"
+                            className="w-full mt-2"
+                          >
+                            <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                            <span className="text-xs sm:text-sm font-semibold">Add Stock</span>
+                          </Button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -1058,15 +1117,29 @@ export default function POSPage() {
                 )}
               </CardContent>
             </Card>
+          </div>
+        </div>
 
-            <Card className="border-2 border-slate-200 shadow-lg">
-              <CardHeader className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100">
+        {/* Recent History Modal */}
+        {showRecentHistory && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col shadow-2xl">
+              <CardHeader className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100 flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                   <Clock className="w-5 h-5 text-gold-500" />
                   <span>Recent History</span>
                 </CardTitle>
+                <button
+                  onClick={() => setShowRecentHistory(false)}
+                  className="text-slate-500 hover:text-slate-700 transition-colors"
+                  aria-label="Close"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </CardHeader>
-              <CardContent className="pt-4 space-y-2 max-h-72 overflow-y-auto pr-1">
+              <CardContent className="pt-4 space-y-2 overflow-y-auto flex-1 pr-2">
                 {salesHistory.length === 0 ? (
                   <p className="text-sm text-slate-500">No transactions yet.</p>
                 ) : (
@@ -1091,7 +1164,50 @@ export default function POSPage() {
               </CardContent>
             </Card>
           </div>
-        </div>
+        )}
+
+        {/* Add Stock Modal (branch admins) */}
+        {showAddStockModal && addStockProduct && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col shadow-2xl">
+              <CardHeader className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100 flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <Plus className="w-5 h-5 text-gold-500" />
+                  <span>Add Stock - {addStockProduct.name}</span>
+                </CardTitle>
+                <button onClick={() => setShowAddStockModal(false)} className="text-slate-500 hover:text-slate-700">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-3 overflow-y-auto flex-1 pr-2">
+                <div>
+                  <label className="text-xs text-slate-600">Quantity to add</label>
+                  <Input type="number" value={addStockQty} min={1} onChange={(e) => setAddStockQty(Math.max(1, Number(e.target.value) || 1))} className="mt-1" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-600">Unit cost (optional)</label>
+                  <Input type="number" value={addStockUnitCost ?? ''} onChange={(e) => setAddStockUnitCost(e.target.value === '' ? undefined : Number(e.target.value))} className="mt-1" />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-600">Reason (optional)</label>
+                  <Input type="text" value={addStockReason} onChange={(e) => setAddStockReason(e.target.value)} className="mt-1" />
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <Button onClick={() => {
+                    if (!user?.branch_id) {
+                      toast({ title: 'No branch set', description: 'Your account is not assigned to a branch', variant: 'destructive' });
+                      return;
+                    }
+                    addStockMutation.mutate({ productId: addStockProduct.id, branchId: user.branch_id, quantity: Math.max(0, Math.floor(addStockQty)), unitCost: addStockUnitCost, reason: addStockReason });
+                  }} className="w-full">Add Stock</Button>
+                  <Button variant="outline" onClick={() => setShowAddStockModal(false)} className="w-full">Cancel</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Floating Mobile Cart Button */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-gradient-to-r from-black via-gray-900 to-black border-t border-gold-500/30 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-lg z-40">

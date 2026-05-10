@@ -10,6 +10,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/lib/authContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import LogoutConfirmHost from "@/components/LogoutConfirmHost";
+import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -48,6 +49,7 @@ const App = () => (
       <AuthProvider>
         <Toaster />
         <Sonner />
+        <PWAInstallPrompt />
         <LogoutConfirmHost />
         <BrowserRouter
           future={{

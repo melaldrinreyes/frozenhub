@@ -101,13 +101,23 @@ function applyInventoryAdjustVisibilityFilter(
   req: any,
   clauses: string[],
   params: any[],
-  actionColumn: string
+  actionColumn: string,
+  resolvedBranchId: string | null
 ) {
   // Keep inventory adjustments visible only in branch audit logs.
+  // Previously admin users could not see UPDATE_INVENTORY logs at all.
+  // Allow admins to view UPDATE_INVENTORY when they have selected a specific branch.
   if (req.user?.role === "admin") {
-    clauses.push(`${actionColumn} <> ?`);
-    params.push("UPDATE_INVENTORY");
+    if (!resolvedBranchId) {
+      // Admin requested global/all branches - hide branch-only inventory adjustments
+      clauses.push(`${actionColumn} <> ?`);
+      params.push("UPDATE_INVENTORY");
+    }
+    return;
   }
+
+  // For non-admin users, keep inventory adjustments scoped to their branch
+  // (applyBranchScopeFilter already enforces branch scoping for non-admins)
 }
 
 export const handleGetActivityLogs: RequestHandler = async (req, res) => {
@@ -134,7 +144,7 @@ export const handleGetActivityLogs: RequestHandler = async (req, res) => {
     const clauses: string[] = ["1=1"];
     const params: any[] = [];
     applyBranchScopeFilter(req, resolvedBranchId, clauses, params, "al.branch_id");
-    applyInventoryAdjustVisibilityFilter(req, clauses, params, "al.action");
+    applyInventoryAdjustVisibilityFilter(req, clauses, params, "al.action", resolvedBranchId);
 
     if (userId) {
       clauses.push("al.user_id = ?");
@@ -218,7 +228,7 @@ export const handleGetActivityStats: RequestHandler = async (req, res) => {
     const clauses: string[] = ["1=1"];
     const params: any[] = [];
     applyBranchScopeFilter(req, resolvedBranchId, clauses, params, "branch_id");
-    applyInventoryAdjustVisibilityFilter(req, clauses, params, "action");
+    applyInventoryAdjustVisibilityFilter(req, clauses, params, "action", resolvedBranchId);
 
     if (startDate) {
       clauses.push("created_at >= ?");
@@ -279,7 +289,7 @@ export const handleGetRecentActivity: RequestHandler = async (req, res) => {
     const clauses: string[] = ["1=1"];
     const params: any[] = [];
     applyBranchScopeFilter(req, resolvedBranchId, clauses, params, "al.branch_id");
-    applyInventoryAdjustVisibilityFilter(req, clauses, params, "al.action");
+    applyInventoryAdjustVisibilityFilter(req, clauses, params, "al.action", resolvedBranchId);
 
     const [rows] = await connection.query(
       `SELECT al.*, b.name AS branch_name

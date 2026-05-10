@@ -139,6 +139,8 @@ import {
 import {
   handleLoginMySQL,
   handleSignupMySQL,
+  handleForgotPasswordMySQL,
+  handleResetPasswordMySQL,
   handleGetProductsMySQL,
   handleGetProductMySQL,
   handleGetBranchesMySQL,
@@ -446,6 +448,8 @@ export function createServer() {
   // Auth routes with specific rate limiters and timing attack prevention
   app.post("/api/auth/login", loginRateLimiter, preventTimingAttacks, runtimeDataProvider === "supabase" ? handleLoginMySQL : handleLogin);
   app.post("/api/auth/signup", signupRateLimiter, preventTimingAttacks, runtimeDataProvider === "supabase" ? handleSignupMySQL : handleSignup);
+  app.post("/api/auth/forgot-password", signupRateLimiter, runtimeDataProvider === "supabase" ? handleForgotPasswordMySQL : handleForgotPasswordMySQL);
+  app.post("/api/auth/reset-password", signupRateLimiter, runtimeDataProvider === "supabase" ? handleResetPasswordMySQL : handleResetPasswordMySQL);
   app.post("/api/auth/supabase-callback", handleSupabaseCallback);
   app.post("/api/auth/logout", handleLogout);
   app.get("/api/auth/me", handleGetMe);

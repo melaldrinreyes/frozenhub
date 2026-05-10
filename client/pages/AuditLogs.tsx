@@ -35,7 +35,16 @@ import {
   Clock3,
   ChevronLeft,
   ChevronRight,
+  Eye,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 function formatDateTime(value: any) {
   if (!value) return new Date();
@@ -117,6 +126,12 @@ function formatMetadataSummary(metadata: unknown) {
   return pairs.join(" • ");
 }
 
+function renderDescriptionDots(description: unknown) {
+  const value = description == null ? "" : String(description).trim();
+  if (!value) return "-";
+  return value.length > 140 ? "...." : value;
+}
+
 function csvEscape(value: unknown) {
   const text = value === null || value === undefined ? "" : String(value);
   return `"${text.replace(/"/g, '""')}"`;
@@ -136,6 +151,8 @@ export default function AuditLogs() {
   const [endDate, setEndDate] = useState<string>("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
+  const [descDialogOpen, setDescDialogOpen] = useState(false);
+  const [selectedLog, setSelectedLog] = useState<any | null>(null);
 
   const effectiveBranchId = canChooseBranch
     ? branchFilter === "all"
@@ -208,6 +225,11 @@ export default function AuditLogs() {
     const systemChanges = Math.max(total - loginCount - salesCount, 0);
     return { total, loginCount, salesCount, systemChanges };
   }, [statsData]);
+
+  const openDescriptionModal = (log: any | null) => {
+    setSelectedLog(log);
+    setDescDialogOpen(true);
+  };
 
   const uniqueActions = useMemo(() => {
     const actionSet = new Set<string>();
@@ -507,6 +529,7 @@ export default function AuditLogs() {
                         <TableHead>Entity</TableHead>
                         <TableHead>Branch</TableHead>
                         <TableHead>Description</TableHead>
+                        <TableHead className="whitespace-nowrap w-20 text-center">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -535,12 +558,22 @@ export default function AuditLogs() {
                             {log.branch_name || log.branch_id || "All Branches"}
                           </TableCell>
                           <TableCell className="max-w-[360px]">
-                            <div className="text-slate-700">{log.description || "-"}</div>
+                            <div className="text-slate-700 flex items-start gap-2">
+                              <div className={String(log.description || "").length > 140 ? "text-slate-500" : "break-words"}>
+                                {renderDescriptionDots(log.description)}
+                              </div>
+                            </div>
                             {formatMetadataSummary(log.metadata) && (
                               <div className="mt-1 text-xs text-slate-500 break-all">
                                 {formatMetadataSummary(log.metadata)}
                               </div>
                             )}
+                            </TableCell>
+                          <TableCell className="whitespace-nowrap print:hidden w-20 text-center">
+                            <Button size="sm" variant="outline" onClick={() => openDescriptionModal(log)} className="p-2">
+                              <Eye className="w-4 h-4" />
+                              <span className="sr-only">View</span>
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -576,7 +609,17 @@ export default function AuditLogs() {
                           <div className="font-medium text-slate-800">{log.entity_name || "-"}</div>
                         </div>
                       </div>
-                      <div className="mt-3 text-sm text-slate-700">{log.description || "-"}</div>
+                      <div className="mt-3 text-sm text-slate-700">
+                        <div className={String(log.description || "").length > 140 ? "text-slate-500" : undefined}>
+                          {renderDescriptionDots(log.description)}
+                        </div>
+                      </div>
+                        <div className="mt-2 flex justify-end print:hidden">
+                          <Button size="xs" variant="outline" onClick={() => openDescriptionModal(log)} className="p-2">
+                            <Eye className="w-4 h-4" />
+                            <span className="sr-only">View</span>
+                          </Button>
+                        </div>
                       {formatMetadataSummary(log.metadata) && (
                         <div className="mt-2 text-xs text-slate-600 rounded-lg bg-white p-3 border border-slate-200">
                           {formatMetadataSummary(log.metadata)}
@@ -658,6 +701,65 @@ export default function AuditLogs() {
             Your branch is not assigned yet, so audit logs cannot be loaded.
           </div>
         )}
+
+        <Dialog open={descDialogOpen} onOpenChange={setDescDialogOpen}>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Activity Details</DialogTitle>
+            </DialogHeader>
+            <DialogDescription>
+              {selectedLog ? (
+                <div className="space-y-4 text-sm text-slate-800">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="text-xs text-slate-500">Time</div>
+                      <div className="font-medium">{formatDateTime(selectedLog.created_at).toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500">User</div>
+                      <div className="font-medium">{selectedLog.user_name || "System"} <div className="text-xs text-slate-500">{selectedLog.user_id || "-"}</div></div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-slate-500">Role</div>
+                      <div className="font-medium">{selectedLog.user_role || "-"}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500">Action</div>
+                      <div className="font-medium">{formatActionLabel(selectedLog.action)}</div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-slate-500">Entity</div>
+                      <div className="font-medium">{toTitleCase(selectedLog.entity_type)}<div className="text-xs text-slate-500">{selectedLog.entity_name || selectedLog.entity_id || "-"}</div></div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500">Branch</div>
+                      <div className="font-medium">{selectedLog.branch_name || selectedLog.branch_id || "All Branches"}</div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs text-slate-500">Description</div>
+                    <div className="whitespace-pre-wrap mt-1 text-sm text-slate-800">{selectedLog.description || "-"}</div>
+                  </div>
+
+                  {formatMetadataSummary(selectedLog.metadata) && (
+                    <div>
+                      <div className="text-xs text-slate-500">Metadata</div>
+                      <div className="mt-1 text-xs text-slate-600 rounded-lg bg-white p-3 border border-slate-200">{formatMetadataSummary(selectedLog.metadata)}</div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>No details available</div>
+              )}
+            </DialogDescription>
+            <DialogFooter>
+              <Button onClick={() => setDescDialogOpen(false)} variant="outline">Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   );
