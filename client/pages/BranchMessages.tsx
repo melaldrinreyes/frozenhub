@@ -324,8 +324,8 @@ export default function BranchMessages() {
   return (
     <AdminLayout userRole="branch">
       <div className="container max-w-6xl mx-auto pb-20 md:pb-6">
-        <div className="flex flex-col h-[calc(100vh-12rem)] md:h-[calc(100vh-10rem)]">
-          <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex flex-col h-[calc(100svh-12.5rem)] md:h-[calc(100dvh-10rem)]">
+          <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
             <Button
               variant="ghost"
               size="sm"
@@ -337,7 +337,7 @@ export default function BranchMessages() {
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back
             </Button>
-            <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
               <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
                 isAdminConversation ? "bg-gold-100" : "bg-blue-100"
               }`}>
@@ -346,13 +346,13 @@ export default function BranchMessages() {
                 }`} />
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="font-semibold text-slate-900 truncate">
+                <h2 className="font-semibold text-sm sm:text-base text-slate-900 truncate">
                   {isAdminConversation ? "System Administrator" : selectedConversation.customer_name}
                 </h2>
                 {isAdminConversation ? (
-                  <p className="text-xs text-slate-600">Super Admin</p>
+                  <p className="hidden sm:block text-xs text-slate-600">Super Admin</p>
                 ) : (
-                  <div className="flex items-center gap-3 text-xs text-slate-600">
+                  <div className="hidden sm:flex items-center gap-3 text-xs text-slate-600">
                     <span className="flex items-center gap-1 truncate">
                       <Mail className="w-3 h-3 flex-shrink-0" />
                       <span className="truncate">{selectedConversation.customer_email}</span>
@@ -386,7 +386,7 @@ export default function BranchMessages() {
           <Card className="flex-1 flex flex-col">
             <CardContent className="flex-1 flex flex-col p-0">
             {/* Messages area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
               {selectedConversation.isNew ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
@@ -414,7 +414,7 @@ export default function BranchMessages() {
                       className={`flex ${isOwnMessage ? "justify-end" : "justify-start"} group`}
                     >
                       <div
-                        className={`max-w-[70%] rounded-lg p-3 relative ${
+                        className={`max-w-[90%] sm:max-w-[78%] md:max-w-[70%] rounded-lg p-2 sm:p-3 relative ${
                           isOwnMessage
                             ? "bg-primary text-white"
                             : "bg-slate-100 text-slate-900"
@@ -425,7 +425,7 @@ export default function BranchMessages() {
                             {msg.sender_name}
                           </p>
                         )}
-                        <p className="text-sm whitespace-pre-wrap break-words pr-6">{msg.message_text}</p>
+                        <p className="text-xs sm:text-sm whitespace-pre-wrap break-words">{msg.message_text}</p>
                         <div className="flex items-center justify-between gap-2 mt-1">
                           <p
                             className={`text-xs ${
@@ -442,7 +442,7 @@ export default function BranchMessages() {
                                   deleteMessageMutation.mutate(msg.id);
                                 }
                               }}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/20 rounded"
+                              className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1 hover:bg-white/20 rounded"
                               title="Delete for me"
                             >
                               <Trash2 className="w-3 h-3" />
@@ -458,8 +458,8 @@ export default function BranchMessages() {
             </div>
 
             {/* Message input */}
-            <div className="border-t border-slate-200 p-4">
-              <div className="flex gap-2">
+            <div className="border-t border-slate-200 p-2 sm:p-4 message-input-area">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Input
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
@@ -470,17 +470,18 @@ export default function BranchMessages() {
                       handleSendMessage();
                     }
                   }}
-                  className="flex-1"
+                  className="flex-1 text-sm h-9 sm:h-10"
                 />
                 <Button
                   onClick={handleSendMessage}
                   disabled={!messageText.trim() || sendMessageMutation.isPending}
-                  className="bg-primary hover:bg-primary/90"
+                  className="bg-primary hover:bg-primary/90 h-9 sm:h-10 px-3 w-full sm:w-auto"
+                  size="sm"
                 >
                   <Send className="w-4 h-4" />
                 </Button>
               </div>
-              <p className="text-xs text-slate-500 mt-1">Press Enter to send</p>
+              <p className="text-xs text-slate-500 mt-1 hidden sm:block">Press Enter to send</p>
             </div>
           </CardContent>
         </Card>

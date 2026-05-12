@@ -158,6 +158,14 @@ export default function AdminDashboard() {
     },
   });
 
+  // Fetch aggregated sales/profit metrics (all branches, all time)
+  const { data: salesStatsData, isLoading: isLoadingSalesStats } = useQuery({
+    queryKey: ["sales-stats-admin-overall"],
+    queryFn: async () => {
+      return apiClient.getSalesStats();
+    },
+  });
+
   // Fetch inventory (all branches)
   const { data: inventoryData, isLoading: isLoadingInventory } = useQuery({
     queryKey: ["inventory-admin"],
@@ -223,6 +231,16 @@ export default function AdminDashboard() {
     (isLoadingStats || isLoadingProducts || isLoadingInventory);
   const totalRevenue = systemStatsData?.stats?.sales?.revenue || 0;
   const totalSales = systemStatsData?.stats?.sales?.total || 0;
+  const totalProfit = Number(
+    salesStatsData?.totalProfit ??
+    salesTrendData?.totals?.totalProfit ??
+    0
+  );
+  const profitMargin = Number(salesStatsData?.profitMargin || 0);
+  const costCoveragePercent = Number(salesStatsData?.costCoverage?.coveragePercent || 0);
+  const zeroCostItems = Number(salesStatsData?.costCoverage?.zeroCostItems || 0);
+  const coveredItems = Number(salesStatsData?.costCoverage?.coveredItems || 0);
+  const totalCostItems = Number(salesStatsData?.costCoverage?.totalItems || 0);
   const activeBranches = branchesData?.branches?.filter((b: any) => b.is_active)?.length || 0;
   const lowStockCount = inventoryData?.inventory?.filter((item: any) => item.quantity <= (item.reorder_level || 10))?.length || 0;
 
@@ -252,7 +270,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Key Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
             <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs sm:text-sm font-semibold text-blue-900">
@@ -268,8 +286,6 @@ export default function AdminDashboard() {
               ) : (
                 <>
                   <div className="text-2xl sm:text-3xl font-bold text-blue-700">{totalProducts.toLocaleString()}</div>
-                  <p className="text-xs text-blue-600 font-medium">Across all branches</p>
-                  <p className="text-[11px] text-blue-500 mt-1">Source: Inventory records</p>
                 </>
               )}
             </CardContent>
@@ -290,8 +306,30 @@ export default function AdminDashboard() {
                 ) : (
                   <>
                     <div className="text-2xl sm:text-3xl font-bold text-green-700">₱{totalRevenue.toLocaleString()}</div>
-                    <p className="text-xs text-green-600 font-medium">All time</p>
-                    <p className="text-[11px] text-green-500 mt-1">Source: Sales transactions (sum of total_amount)</p>
+                   
+                   
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200 hover:shadow-lg transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-xs sm:text-sm font-semibold text-emerald-900">
+                  Total Profit
+                </CardTitle>
+                <div className="p-2 bg-emerald-500 rounded-lg">
+                  <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                {isLoadingSalesStats ? (
+                  <div className="text-xl sm:text-2xl font-bold text-emerald-700 animate-pulse">...</div>
+                ) : (
+                  <>
+                    <div className="text-2xl sm:text-3xl font-bold text-emerald-700">
+                      ₱{totalProfit.toLocaleString()}
+                    </div> 
                   </>
                 )}
               </CardContent>
@@ -300,7 +338,7 @@ export default function AdminDashboard() {
             <Card className="bg-gradient-to-br from-gold-50 to-yellow-100 border-gold-200 hover:shadow-lg transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-xs sm:text-sm font-semibold text-gold-900">
-                  Total Sales
+                  Total Transactions
                 </CardTitle>
                 <div className="p-2 bg-gold-500 rounded-lg">
                   <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
@@ -312,8 +350,8 @@ export default function AdminDashboard() {
                 ) : (
                   <>
                     <div className="text-2xl sm:text-3xl font-bold text-gold-700">{totalSales.toLocaleString()}</div>
-                    <p className="text-xs text-gold-600 font-medium">All time orders</p>
-                    <p className="text-[11px] text-gold-700/80 mt-1">Source: Sales transactions (count)</p>
+                  
+                    
                   </>
                 )}
               </CardContent>
@@ -334,8 +372,7 @@ export default function AdminDashboard() {
               ) : (
                 <>
                   <div className="text-2xl sm:text-3xl font-bold text-purple-700">{activeBranches}</div>
-                  <p className="text-xs text-purple-600 font-medium">Operating now</p>
-                  <p className="text-[11px] text-purple-500 mt-1">Source: Active branches list</p>
+                  
                 </>
               )}
             </CardContent>

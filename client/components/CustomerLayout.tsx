@@ -303,7 +303,7 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
       </header>
 
       {/* Main Content */}
-      <main className="pb-20 md:pb-6">{children}</main>
+      <main className="pb-[calc(6.5rem+env(safe-area-inset-bottom))] md:pb-6">{children}</main>
 
       {/* Bottom Navigation - Mobile Only */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 px-3 pb-3">

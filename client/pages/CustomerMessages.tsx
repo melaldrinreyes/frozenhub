@@ -199,7 +199,7 @@ export default function CustomerMessages() {
   if (!selectedConversation && !showNewMessage) {
     return (
       <CustomerLayout>
-        <div className="container max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-6 pb-24 md:pb-6">
+        <div className="w-full max-w-4xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6 pb-20 sm:pb-8 md:pb-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Messages</h1>
@@ -313,7 +313,7 @@ export default function CustomerMessages() {
   if (showNewMessage) {
     return (
       <CustomerLayout>
-        <div className="container max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-6 pb-24 md:pb-6">
+        <div className="w-full max-w-4xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6 pb-20 sm:pb-8 md:pb-6">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -384,57 +384,57 @@ export default function CustomerMessages() {
   // Show conversation messages
   return (
     <CustomerLayout>
-      <div className="container max-w-4xl mx-auto px-4 sm:px-6 py-6 pb-24 md:pb-6">
-        <div className="flex flex-col h-[calc(100vh-12rem)] md:h-[calc(100vh-10rem)]">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setSelectedConversation(null);
-                setMessageText("");
-              }}
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
-            </Button>
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <Building2 className="w-5 h-5 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="font-semibold text-slate-900 truncate">{selectedConversation.branch_name}</h2>
-                <p className="text-xs text-slate-600 truncate">{selectedConversation.branch_location}</p>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                if (confirm(`Delete conversation with ${selectedConversation.branch_name} for you? (Branch will still see it)`)) {
-                  deleteConversationMutation.mutate(selectedConversation.id);
-                }
-              }}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
-              title="Delete for me"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
+      <div className="w-full max-w-3xl mx-auto flex flex-col bg-slate-50 min-h-[calc(100dvh-64px)] pb-[calc(6.5rem+env(safe-area-inset-bottom))] sm:pb-0">
+        {/* Header */}
+        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 px-2 sm:px-4 py-2 border-b border-slate-200 flex-shrink-0 bg-white/95 backdrop-blur-sm">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 text-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]"
+            onClick={() => {
+              setSelectedConversation(null);
+              setMessageText("");
+            }}
+          >
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            <span className="text-xs sm:text-sm">Chats</span>
+          </Button>
+
+          <div className="text-center min-w-0 px-1">
+            <h2 className="font-semibold text-sm sm:text-base text-slate-900 truncate">
+              {selectedConversation.branch_name}
+            </h2>
+            <p className="text-[10px] sm:text-xs text-slate-500 truncate">
+              {selectedConversation.branch_location}
+            </p>
           </div>
 
-          <Card className="flex-1 flex flex-col">
-            <CardContent className="flex-1 flex flex-col p-0">
-            {/* Messages area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 text-slate-500 hover:text-red-600"
+            onClick={() => {
+              if (confirm(`Delete conversation with ${selectedConversation.branch_name} for you? (Branch will still see it)`)) {
+                deleteConversationMutation.mutate(selectedConversation.id);
+              }
+            }}
+            title="Delete for me"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+
+        {/* Messages area - scrollable with proper overflow */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-2 sm:px-4 py-3 space-y-2 sm:space-y-3">
               {messagesLoading ? (
                 <div className="flex items-center justify-center h-full">
-                  <div className="text-sm text-slate-600">Loading messages...</div>
+              <div className="text-xs sm:text-sm text-slate-600">Loading messages...</div>
                 </div>
               ) : messages.length === 0 ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
-                    <MessageCircle className="w-12 h-12 mx-auto text-slate-300 mb-2" />
-                    <p className="text-sm text-slate-600">No messages yet</p>
+                    <MessageCircle className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-slate-300 mb-2" />
+                    <p className="text-xs sm:text-sm text-slate-600">No messages yet</p>
                   </div>
                 </div>
               ) : (
@@ -443,42 +443,48 @@ export default function CustomerMessages() {
                   return (
                     <div
                       key={msg.id}
-                      className={`flex ${isOwnMessage ? "justify-end" : "justify-start"} group`}
+                      className={`flex ${isOwnMessage ? "justify-end" : "justify-start"} group px-0.5`}
                     >
-                      <div
-                        className={`max-w-[70%] rounded-lg p-3 relative ${
-                          isOwnMessage
-                            ? "bg-primary text-white"
-                            : "bg-slate-100 text-slate-900"
-                        }`}
-                      >
-                        {!isOwnMessage && (
-                          <p className="text-xs font-semibold mb-1 opacity-75">
-                            {msg.sender_name}
-                          </p>
-                        )}
-                        <p className="text-sm whitespace-pre-wrap break-words pr-6">{msg.message_text}</p>
-                        <div className="flex items-center justify-between gap-2 mt-1">
-                          <p
-                            className={`text-xs ${
-                              isOwnMessage ? "text-white/70" : "text-slate-500"
-                            }`}
-                          >
-                            {formatMessageTime(msg.created_at)}
-                          </p>
-                          {isOwnMessage && (
-                            <button
-                              onClick={() => {
-                                if (confirm("Delete this message for you? (Other person will still see it)")) {
-                                  deleteMessageMutation.mutate(msg.id);
-                                }
-                              }}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/20 rounded"
-                              title="Delete for me"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
+                      <div className={`flex items-end gap-2 max-w-[92%] sm:max-w-[80%] ${isOwnMessage ? "flex-row-reverse" : "flex-row"}`}>
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 ${isOwnMessage ? "bg-primary/20 text-[hsl(var(--primary))]" : "bg-slate-300 text-slate-700"}`}>
+                          {isOwnMessage
+                            ? (user?.name?.charAt(0).toUpperCase() || "Y")
+                            : (msg.sender_name?.charAt(0).toUpperCase() || "A")}
+                        </div>
+
+                        <div
+                          className={`rounded-2xl px-3 py-2.5 relative ${
+                            isOwnMessage
+                              ? "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"
+                              : "bg-slate-200 text-slate-900"
+                          }`}
+                        >
+                          {!isOwnMessage && (
+                            <p className="text-[10px] font-semibold mb-1 opacity-70">
+                              {msg.sender_name}
+                            </p>
                           )}
+                          <p className="text-[13px] sm:text-sm leading-snug whitespace-pre-wrap break-words">
+                            {msg.message_text}
+                          </p>
+                          <div className={`mt-1 flex items-center gap-1 ${isOwnMessage ? "justify-end" : "justify-start"}`}>
+                            <p className={`text-[10px] ${isOwnMessage ? "text-white/70" : "text-slate-500"}`}>
+                              {formatMessageTime(msg.created_at)}
+                            </p>
+                            {isOwnMessage && (
+                              <button
+                                onClick={() => {
+                                  if (confirm("Delete this message for you? (Other person will still see it)")) {
+                                    deleteMessageMutation.mutate(msg.id);
+                                  }
+                                }}
+                                className="hidden sm:inline-flex opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/20 rounded"
+                                title="Delete for me"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -486,35 +492,32 @@ export default function CustomerMessages() {
                 })
               )}
               <div ref={messagesEndRef} />
-            </div>
+        </div>
 
-            {/* Message input */}
-            <div className="border-t border-slate-200 p-4">
-              <div className="flex gap-2">
-                <Input
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  placeholder="Type a message..."
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  className="flex-1"
-                />
-                <Button
-                  onClick={handleSendMessage}
-                  disabled={!messageText.trim() || sendMessageMutation.isPending}
-                  className="bg-primary hover:bg-primary/90"
-                >
-                  <Send className="w-4 h-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-slate-500 mt-1">Press Enter to send</p>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Message input */}
+        <div className="sticky bottom-0 z-20 border-t border-slate-200 px-2 sm:px-4 py-2 bg-white/95 backdrop-blur-sm flex-shrink-0 message-input-area">
+          <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1 shadow-sm">
+            <Input
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              placeholder="Type a message..."
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+              className="flex-1 text-sm h-9 border-0 shadow-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+            />
+            <Button
+              onClick={handleSendMessage}
+              disabled={!messageText.trim() || sendMessageMutation.isPending}
+              className="bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-[hsl(var(--primary-foreground))] h-8 w-8 rounded-full p-0 flex-shrink-0"
+              size="sm"
+            >
+              <Send className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </div>
     </CustomerLayout>

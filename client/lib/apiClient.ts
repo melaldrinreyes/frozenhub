@@ -505,6 +505,15 @@ class ApiClient {
       avgPurchaseValue: number;
       totalProfit: number;
       profitMargin: number;
+      costCoverage?: {
+        totalItems: number;
+        fifoItems: number;
+        productCostItems: number;
+        purchaseAvgItems: number;
+        zeroCostItems: number;
+        coveredItems: number;
+        coveragePercent: number;
+      };
       topProducts?: any[];
       branchBreakdown?: any[];
     }>(`/sales/stats${query}`);

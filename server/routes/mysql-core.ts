@@ -1689,21 +1689,21 @@ export const handleGetSalesStatsMySQL: RequestHandler = async (req, res) => {
     const params: any[] = [];
 
     if (requesterRole === "branch_admin" && resolvedBranchId) {
-      clauses.push("branch_id = ?");
+      clauses.push("s.branch_id = ?");
       params.push(resolvedBranchId);
     } else if (resolvedBranchId) {
-      clauses.push("branch_id = ?");
+      clauses.push("s.branch_id = ?");
       params.push(resolvedBranchId);
     }
     if (startDate) {
-      clauses.push("date >= ?");
+      clauses.push("s.date >= ?");
       params.push(startDate);
     }
     if (endDate) {
-      clauses.push("date <= ?");
+      clauses.push("s.date <= ?");
       params.push(`${endDate} 23:59:59`);
     }
-    clauses.push("status = 'completed'");
+    clauses.push("s.status = 'completed'");
 
     const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
 
@@ -1711,25 +1711,103 @@ export const handleGetSalesStatsMySQL: RequestHandler = async (req, res) => {
       `SELECT COUNT(*) as totalSales,
               COALESCE(SUM(total_amount), 0) as totalRevenue,
               COALESCE(AVG(total_amount), 0) as avgOrderValue
-       FROM sales
+       FROM sales s
+       ${where}`,
+      params
+    );
+
+    // Compute cost of goods sold (COGS) from FIFO allocations when available.
+    // Fallback to product cost * quantity for legacy sale items without allocations.
+    const [costRows] = await connection.query(
+      `SELECT COALESCE(SUM(
+          CASE
+            WHEN COALESCE(siib.item_cost, 0) > 0 THEN siib.item_cost
+            WHEN COALESCE(p.cost, 0) > 0 THEN COALESCE(p.cost, 0) * COALESCE(si.quantity, 0)
+            ELSE COALESCE(pac.avg_unit_cost, 0) * COALESCE(si.quantity, 0)
+          END
+        ), 0) AS totalExpenses
+       FROM sales s
+       INNER JOIN sale_items si ON si.sale_id = s.id
+       LEFT JOIN (
+         SELECT sale_item_id, COALESCE(SUM(total_cost), 0) AS item_cost
+         FROM sale_item_inventory_batches
+         GROUP BY sale_item_id
+       ) siib ON siib.sale_item_id = si.id
+       LEFT JOIN products p ON p.id = si.product_id
+       LEFT JOIN (
+         SELECT pi.product_id,
+                COALESCE(SUM(pi.total) / NULLIF(SUM(pi.quantity), 0), 0) AS avg_unit_cost
+         FROM purchase_items pi
+         INNER JOIN purchases pu ON pu.id = pi.purchase_id
+         WHERE pu.status = 'received'
+         GROUP BY pi.product_id
+       ) pac ON pac.product_id = si.product_id
+       ${where}`,
+      params
+    );
+
+    const [coverageRows] = await connection.query(
+      `SELECT
+          COUNT(*) AS totalItems,
+          SUM(CASE WHEN COALESCE(siib.item_cost, 0) > 0 THEN 1 ELSE 0 END) AS fifoItems,
+          SUM(CASE WHEN COALESCE(siib.item_cost, 0) <= 0 AND COALESCE(p.cost, 0) > 0 THEN 1 ELSE 0 END) AS productCostItems,
+          SUM(CASE WHEN COALESCE(siib.item_cost, 0) <= 0 AND COALESCE(p.cost, 0) <= 0 AND COALESCE(pac.avg_unit_cost, 0) > 0 THEN 1 ELSE 0 END) AS purchaseAvgItems,
+          SUM(CASE WHEN COALESCE(siib.item_cost, 0) <= 0 AND COALESCE(p.cost, 0) <= 0 AND COALESCE(pac.avg_unit_cost, 0) <= 0 THEN 1 ELSE 0 END) AS zeroCostItems
+       FROM sales s
+       INNER JOIN sale_items si ON si.sale_id = s.id
+       LEFT JOIN (
+         SELECT sale_item_id, COALESCE(SUM(total_cost), 0) AS item_cost
+         FROM sale_item_inventory_batches
+         GROUP BY sale_item_id
+       ) siib ON siib.sale_item_id = si.id
+       LEFT JOIN products p ON p.id = si.product_id
+       LEFT JOIN (
+         SELECT pi.product_id,
+                COALESCE(SUM(pi.total) / NULLIF(SUM(pi.quantity), 0), 0) AS avg_unit_cost
+         FROM purchase_items pi
+         INNER JOIN purchases pu ON pu.id = pi.purchase_id
+         WHERE pu.status = 'received'
+         GROUP BY pi.product_id
+       ) pac ON pac.product_id = si.product_id
        ${where}`,
       params
     );
 
     const stats = (rows as any[])[0] || {};
+    const costStats = (costRows as any[])[0] || {};
+    const coverageStats = (coverageRows as any[])[0] || {};
     const totalSales = Number(stats.totalSales ?? stats.totalsales ?? 0);
     const totalRevenue = Number(stats.totalRevenue ?? stats.totalrevenue ?? 0);
     const avgOrderValue = Number(stats.avgOrderValue ?? stats.avgordervalue ?? 0);
+    const totalExpenses = Number(costStats.totalExpenses ?? costStats.totalexpenses ?? 0);
+    const totalProfit = totalRevenue - totalExpenses;
+    const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+    const totalItems = Number(coverageStats.totalItems ?? coverageStats.totalitems ?? 0);
+    const fifoItems = Number(coverageStats.fifoItems ?? coverageStats.fifoitems ?? 0);
+    const productCostItems = Number(coverageStats.productCostItems ?? coverageStats.productcostitems ?? 0);
+    const purchaseAvgItems = Number(coverageStats.purchaseAvgItems ?? coverageStats.purchaseavgitems ?? 0);
+    const zeroCostItems = Number(coverageStats.zeroCostItems ?? coverageStats.zerocostitems ?? 0);
+    const coveredItems = fifoItems + productCostItems + purchaseAvgItems;
+    const coveragePercent = totalItems > 0 ? (coveredItems / totalItems) * 100 : 0;
 
     res.json({
       totalSales,
       totalRevenue,
       avgOrderValue,
       totalPurchases: 0,
-      totalExpenses: 0,
+      totalExpenses,
       avgPurchaseValue: 0,
-      totalProfit: totalRevenue,
-      profitMargin: totalRevenue > 0 ? 100 : 0,
+      totalProfit,
+      profitMargin,
+      costCoverage: {
+        totalItems,
+        fifoItems,
+        productCostItems,
+        purchaseAvgItems,
+        zeroCostItems,
+        coveredItems,
+        coveragePercent,
+      },
       topProducts: [],
       branchBreakdown: [],
     });
@@ -1744,6 +1822,15 @@ export const handleGetSalesStatsMySQL: RequestHandler = async (req, res) => {
       avgPurchaseValue: 0,
       totalProfit: 0,
       profitMargin: 0,
+      costCoverage: {
+        totalItems: 0,
+        fifoItems: 0,
+        productCostItems: 0,
+        purchaseAvgItems: 0,
+        zeroCostItems: 0,
+        coveredItems: 0,
+        coveragePercent: 0,
+      },
       topProducts: [],
       branchBreakdown: [],
     });

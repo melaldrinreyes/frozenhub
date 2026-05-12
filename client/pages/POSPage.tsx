@@ -956,14 +956,13 @@ export default function POSPage() {
                 ) : (
                   <div className="space-y-4">
                     {/* Cart Items */}
-                    <div className="space-y-2 sm:space-y-3 max-h-[36vh] sm:max-h-60 lg:max-h-[50vh] overflow-y-auto pr-1 sm:pr-2 custom-scrollbar">
+                    <div className="space-y-2 sm:space-y-3 max-h-[36vh] sm:max-h-60 lg:max-h-[50vh] overflow-y-auto overflow-x-hidden pr-1 sm:pr-2 custom-scrollbar">
                       {cart.map((item) => (
                         <div
                           key={item.id}
-                          className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 sm:p-4 bg-gradient-to-br from-white to-slate-50 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all"
+                          className="w-full min-w-0 grid grid-cols-[1fr_auto] gap-2 sm:gap-3 p-3 sm:p-4 bg-gradient-to-br from-white to-slate-50 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all"
                         >
-                          {/* Top row: Image, Info, Remove button (mobile) */}
-                          <div className="flex items-start gap-3 flex-1">
+                          <div className="flex items-start gap-3 min-w-0">
                             <div className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-primary/10 to-primary/5 rounded-lg overflow-hidden">
                               {item.image && item.image.startsWith('/') ? (
                                 <img 
@@ -1006,23 +1005,15 @@ export default function POSPage() {
                                 </p>
                               )}
                             </div>
-                            <button
-                              onClick={() => removeFromCart(item.id)}
-                              className="sm:hidden p-2 hover:bg-red-50 hover:text-red-600 rounded-lg text-slate-400 transition-colors"
-                              aria-label="Remove item"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
                           </div>
-                          
-                          {/* Bottom row: Quantity controls (mobile) / Right side (desktop) */}
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
-                            <div className="flex items-center justify-between gap-2 bg-white rounded-lg border border-slate-200 p-1 w-full sm:w-auto">
+
+                          <div className="flex flex-col items-end gap-2 min-w-[112px]">
+                            <div className="flex items-center justify-between gap-1 bg-white rounded-xl border border-slate-200 p-1 w-[112px]">
                               <button
                                 onClick={() =>
                                   updateQuantity(item.id, item.quantity - 1)
                                 }
-                                className="p-2 hover:bg-slate-100 rounded transition-colors"
+                                className="p-1.5 hover:bg-slate-100 rounded transition-colors"
                                 aria-label="Decrease quantity"
                               >
                                 <Minus className="w-3.5 h-3.5 text-slate-600" />
@@ -1034,21 +1025,23 @@ export default function POSPage() {
                                 onClick={() =>
                                   updateQuantity(item.id, item.quantity + 1)
                                 }
-                                className="p-2 hover:bg-slate-100 rounded transition-colors"
+                                className="p-1.5 hover:bg-slate-100 rounded transition-colors"
                                 aria-label="Increase quantity"
                               >
                                 <Plus className="w-3.5 h-3.5 text-slate-600" />
                               </button>
                             </div>
-                            <div className="text-sm sm:text-base font-bold text-slate-900 sm:min-w-[5rem] sm:text-right">
+
+                            <div className="text-sm sm:text-base font-bold text-slate-900 text-right w-full">
                               ₱{(item.price * item.quantity - item.discountAmount).toFixed(2)}
                             </div>
+
                             <button
                               onClick={() => removeFromCart(item.id)}
-                              className="hidden sm:block p-2 hover:bg-red-50 hover:text-red-600 rounded-lg text-slate-400 transition-colors"
+                              className="p-1.5 hover:bg-red-50 hover:text-red-600 rounded-lg text-slate-400 transition-colors"
                               aria-label="Remove item"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </div>
@@ -1175,7 +1168,12 @@ export default function POSPage() {
                   <Plus className="w-5 h-5 text-gold-500" />
                   <span>Add Stock - {addStockProduct.name}</span>
                 </CardTitle>
-                <button onClick={() => setShowAddStockModal(false)} className="text-slate-500 hover:text-slate-700">
+                <button
+                  onClick={() => setShowAddStockModal(false)}
+                  className="text-slate-500 hover:text-slate-700"
+                  aria-label="Close add stock modal"
+                  title="Close"
+                >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
