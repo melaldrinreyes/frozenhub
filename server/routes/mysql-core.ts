@@ -783,7 +783,7 @@ export const handleGetSystemStatsMySQL: RequestHandler = async (_req, res) => {
     const [[productsCount], [branchesCount], [salesStats], [customerCount]] = await Promise.all([
       connection.query("SELECT COUNT(*) as total FROM products") as any,
       connection.query("SELECT COUNT(*) as total FROM branches") as any,
-      connection.query("SELECT COUNT(*) as total, COALESCE(SUM(total_amount), 0) as revenue FROM sales") as any,
+      connection.query("SELECT COUNT(*) as total, COALESCE(SUM(CASE WHEN COALESCE(is_cod_pending, FALSE) = FALSE THEN total_amount ELSE 0 END), 0) as revenue FROM sales") as any,
       connection.query("SELECT COUNT(*) as total FROM users WHERE role = 'customer'") as any,
     ]);
 
@@ -1375,7 +1375,7 @@ export const handleGetTransferLogsMySQL: RequestHandler = async (req, res) => {
 };
 
 export const handleGetSalesMySQL: RequestHandler = async (req, res) => {
-  const { branchId, startDate, endDate, page = 1, limit = 10, status } = req.query;
+  const { branchId, startDate, endDate, page = 1, limit = 10, status, excludeUnverifiedCod } = req.query;
   const requesterRole = req.user?.role;
   let connection;
   try {
@@ -1431,6 +1431,10 @@ export const handleGetSalesMySQL: RequestHandler = async (req, res) => {
       clauses.push("s.branch_id = ?");
       params.push(resolvedBranchId);
     }
+
+    if (String(excludeUnverifiedCod || "").toLowerCase() === "true") {
+      clauses.push("COALESCE(s.is_cod_pending, FALSE) = FALSE");
+    }
     if (startDate) {
       clauses.push("s.date >= ?");
       params.push(startDate);
@@ -1439,7 +1443,6 @@ export const handleGetSalesMySQL: RequestHandler = async (req, res) => {
       clauses.push("s.date <= ?");
       params.push(`${endDate} 23:59:59`);
     }
-
     const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
 
     const [countRows] = await connection.query(
@@ -1703,6 +1706,7 @@ export const handleGetSalesStatsMySQL: RequestHandler = async (req, res) => {
       clauses.push("s.date <= ?");
       params.push(`${endDate} 23:59:59`);
     }
+    clauses.push("COALESCE(s.is_cod_pending, FALSE) = FALSE");
     clauses.push("s.status = 'completed'");
 
     const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
@@ -1911,6 +1915,7 @@ export const handleGetSalesTrendMySQL: RequestHandler = async (req, res) => {
       clauses.push("branch_id = ?");
       params.push(resolvedBranchId);
     }
+    clauses.push("COALESCE(is_cod_pending, FALSE) = FALSE");
     clauses.push("status = 'completed'");
     clauses.push("date >= ?");
     params.push(formatLocalDateTime(start));
@@ -2161,7 +2166,8 @@ export const handleCreateSaleMySQL: RequestHandler = async (req, res) => {
     paymentMethod === "gcash" ||
     paymentMethod === "paymaya" ||
     paymentMethod === "bank_transfer" ||
-    paymentMethod === "online"
+    paymentMethod === "online" ||
+    paymentMethod === "cod"
       ? paymentMethod
       : "cash";
 

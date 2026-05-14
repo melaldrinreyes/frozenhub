@@ -7,8 +7,8 @@ import { useAuth } from "@/lib/authContext";
 import { confirmLogout } from "@/lib/logout";
 import { apiClient } from "@/lib/apiClient";
 import { useToast } from "@/hooks/use-toast";
-import { Bike, Clock, CheckCircle2, MapPin, Phone, User, AlertCircle } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Bike, Clock, CheckCircle2, MapPin, Phone, User, AlertCircle, DollarSign } from "lucide-react";
+import { useNavigate, Link } from "react-router-dom";
 
 interface RiderOrder {
   id: string;
@@ -175,6 +175,40 @@ export default function RiderProfile() {
             <CardHeader className="pb-2"><CardTitle className="text-sm">Delivered Amount</CardTitle></CardHeader>
             <CardContent><div className="text-2xl font-bold">P{deliveredRevenue.toFixed(2)}</div></CardContent>
           </Card>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Link to="/rider/cod-collections">
+            <Card className="hover:shadow-md transition-all cursor-pointer h-full bg-white border-2 border-slate-300 hover:border-blue-600">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-blue-100 rounded-lg">
+                    <DollarSign className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-900">COD Collections</p>
+                    <p className="text-xs text-slate-600">View & collect COD payments</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link to="/rider/remittances">
+            <Card className="hover:shadow-md transition-all cursor-pointer h-full bg-white border-2 border-slate-300 hover:border-purple-600">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-purple-100 rounded-lg">
+                    <Clock className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-900">Remittance History</p>
+                    <p className="text-xs text-slate-600">View submitted remittances</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
 
         <Card>

@@ -91,6 +91,7 @@ export default function BranchSalesReport() {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
         branchId: user.branch_id,
+        excludeUnverifiedCod: "true",
       });
       
       const response = await fetch(`/api/sales?${params}`);

@@ -19,14 +19,34 @@ export default function AuthCallback() {
 
     const handleCallback = async () => {
       try {
-        // Get the session from Supabase
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
+        // First, try to parse the OAuth redirect URL (access_token in hash)
+        // This consumes the URL fragment and establishes the session client-side.
+        let session = null;
+        try {
+          // getSessionFromUrl handles the OAuth redirect response (access_token in hash)
+          const result = await (supabase.auth as any).getSessionFromUrl();
+          session = result?.data?.session ?? null;
+        } catch (e) {
+          // ignore parsing errors and fallback to getSession()
+          session = null;
+        }
 
-        if (sessionError || !session) {
-          throw new Error(sessionError?.message || "No session found");
+        // If not found via URL parsing, fall back to stored session
+        if (!session) {
+          const {
+            data: { session: storedSession },
+            error: sessionError,
+          } = await supabase.auth.getSession();
+
+          if (sessionError) {
+            throw new Error(sessionError.message || "No session found");
+          }
+
+          session = storedSession;
+        }
+
+        if (!session) {
+          throw new Error("No session found");
         }
 
         // Exchange Supabase session for app session + JWT token.

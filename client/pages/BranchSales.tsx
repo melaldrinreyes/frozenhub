@@ -130,7 +130,15 @@ export default function BranchSales() {
   const { data: salesData, isLoading: isLoadingSales } = useQuery({
     queryKey: ["sales", user?.branch_id, dateRangeParams],
     queryFn: async () => {
-      const result = await apiClient.getSales(user?.branch_id || undefined, dateRangeParams.startDate, dateRangeParams.endDate);
+      const result = await apiClient.getSales(
+        user?.branch_id || undefined,
+        dateRangeParams.startDate,
+        dateRangeParams.endDate,
+        undefined,
+        undefined,
+        undefined,
+        true
+      );
       console.log("🛒 Sales List:", result);
       return result;
     },

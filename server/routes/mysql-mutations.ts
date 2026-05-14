@@ -126,6 +126,39 @@ async function getPaymentStatusValue(
   }
 }
 
+function buildCodCollectionCustomerDetails(latestSale: any, fallbackRiderId: string | null) {
+  let parsedCustomerInfo: any = {};
+
+  try {
+    parsedCustomerInfo = typeof latestSale.customer_info === "string"
+      ? JSON.parse(latestSale.customer_info || "{}")
+      : latestSale.customer_info || {};
+  } catch {
+    parsedCustomerInfo = {};
+  }
+
+  const customerName = String(
+    parsedCustomerInfo.name ||
+    parsedCustomerInfo.fullName ||
+    parsedCustomerInfo.customer_name ||
+    latestSale.customer_name ||
+    "Customer"
+  ).trim() || "Customer";
+
+  const customerPhone = String(
+    parsedCustomerInfo.phone ||
+    parsedCustomerInfo.contact ||
+    latestSale.customer_phone ||
+    "N/A"
+  ).trim() || "N/A";
+
+  return {
+    customerName,
+    customerPhone,
+    riderId: latestSale.assigned_rider_id || fallbackRiderId,
+  };
+}
+
 async function tableExists(connection: any, tableName: string): Promise<boolean> {
   try {
     const [rows] = await connection.query("SHOW TABLES LIKE ?", [tableName]);
@@ -1937,11 +1970,21 @@ export const handleUpdateOrderStatusMySQL: RequestHandler = async (req, res) => 
       salesColumnExists(connection, "picked_up_at"),
       salesColumnExists(connection, "delivered_at"),
     ]);
+    const [hasCodPending, hasCodCollectionId] = await Promise.all([
+      salesColumnExists(connection, "is_cod_pending"),
+      salesColumnExists(connection, "cod_collection_id"),
+    ]);
 
     const [saleRows] = await connection.query(
       hasAssignedRider
-        ? "SELECT id, branch_id, status, customer_info, assigned_rider_id FROM sales WHERE id = ? LIMIT 1"
-        : "SELECT id, branch_id, status, customer_info, NULL as assigned_rider_id FROM sales WHERE id = ? LIMIT 1",
+        ? `SELECT id, branch_id, status, total_amount, payment_method, customer_info, assigned_rider_id,
+                  ${hasCodPending ? "is_cod_pending" : "FALSE AS is_cod_pending"},
+                  ${hasCodCollectionId ? "cod_collection_id" : "NULL AS cod_collection_id"}
+           FROM sales WHERE id = ? LIMIT 1`
+        : `SELECT id, branch_id, status, total_amount, payment_method, customer_info, NULL as assigned_rider_id,
+                  ${hasCodPending ? "is_cod_pending" : "FALSE AS is_cod_pending"},
+                  ${hasCodCollectionId ? "cod_collection_id" : "NULL AS cod_collection_id"}
+           FROM sales WHERE id = ? LIMIT 1`,
       [id]
     );
     const sale = (saleRows as any[])[0];
@@ -1960,6 +2003,7 @@ export const handleUpdateOrderStatusMySQL: RequestHandler = async (req, res) => 
 
     const currentStatus = String(sale.status);
     const nextStatus = String(status);
+    const isCodOrder = String(sale.is_cod_pending) === "1" || String(sale.is_cod_pending).toLowerCase() === "true" || String(sale.payment_method || "").toLowerCase() === "cod";
 
     // Branch admins can manage kitchen/order preparation flow only.
     if (req.user?.role === "branch_admin") {
@@ -2062,7 +2106,7 @@ export const handleUpdateOrderStatusMySQL: RequestHandler = async (req, res) => 
     }
     if (String(status) === "completed") {
       if (hasDeliveredAt) statusUpdates.push("delivered_at = NOW()");
-      if (hasPaymentStatus) statusUpdates.push(`payment_status = '${successPaymentValue}'`);
+      if (hasPaymentStatus && !isCodOrder) statusUpdates.push(`payment_status = '${successPaymentValue}'`);
     }
     if (String(status) === "cancelled" && hasPaymentStatus) {
       statusUpdates.push(`payment_status = '${failedPaymentValue}'`);
@@ -2089,6 +2133,84 @@ export const handleUpdateOrderStatusMySQL: RequestHandler = async (req, res) => 
     if (Number((result as any)?.affectedRows || 0) === 0) {
       res.status(404).json({ error: "Sale not found" });
       return;
+    }
+
+    if (String(status) === "completed" && isCodOrder) {
+      try {
+        const [saleDetailsRows] = await connection.query(
+          `SELECT customer_info, total_amount, branch_id, assigned_rider_id, cod_collection_id
+           FROM sales
+           WHERE id = ?
+           LIMIT 1`,
+          [id]
+        );
+        const latestSale = (saleDetailsRows as any[])[0] || sale;
+        const codCustomerDetails = buildCodCollectionCustomerDetails(
+          latestSale,
+          String(req.user?.id || sale.assigned_rider_id || "") || null
+        );
+
+        const [existingCollectionRows] = await connection.query(
+          `SELECT id, rider_id, status
+           FROM cod_collections
+           WHERE sale_id = ?
+           LIMIT 1`,
+          [id]
+        );
+        const existingCollection = (existingCollectionRows as any[])[0];
+
+        if (existingCollection) {
+          const targetRiderId = latestSale.assigned_rider_id || existingCollection.rider_id || codCustomerDetails.riderId || null;
+          await connection.query(
+            `UPDATE cod_collections
+             SET rider_id = COALESCE(?, rider_id),
+                 branch_id = ?,
+                 customer_name = COALESCE(NULLIF(TRIM(customer_name), ''), ?),
+                 customer_phone = COALESCE(NULLIF(TRIM(customer_phone), ''), ?),
+                 amount = COALESCE(amount, ?)
+             WHERE id = ?`,
+            [
+              targetRiderId,
+              latestSale.branch_id,
+              codCustomerDetails.customerName,
+              codCustomerDetails.customerPhone,
+              Number(latestSale.total_amount || 0),
+              existingCollection.id,
+            ]
+          );
+
+          if (hasCodPending && hasCodCollectionId) {
+            await connection.query(
+              `UPDATE sales SET is_cod_pending = TRUE, cod_collection_id = ? WHERE id = ?`,
+              [existingCollection.id, id]
+            );
+          }
+        } else {
+          const codCollectionId = randomId("codc");
+          await connection.query(
+            `INSERT INTO cod_collections (id, sale_id, rider_id, branch_id, customer_name, customer_phone, amount, status, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW())`,
+            [
+              codCollectionId,
+              id,
+              codCustomerDetails.riderId || null,
+              latestSale.branch_id,
+              codCustomerDetails.customerName,
+              codCustomerDetails.customerPhone,
+              Number(latestSale.total_amount || 0),
+            ]
+          );
+
+          if (hasCodPending && hasCodCollectionId) {
+            await connection.query(
+              `UPDATE sales SET is_cod_pending = TRUE, cod_collection_id = ? WHERE id = ?`,
+              [codCollectionId, id]
+            );
+          }
+        }
+      } catch (codError) {
+        console.error("MySQL COD collection creation warning:", codError);
+      }
     }
 
     if (String(status) === "completed") {
@@ -2154,9 +2276,10 @@ export const handleCreateCustomerOrderMySQL: RequestHandler = async (req, res) =
     return;
   }
 
-  const normalizedPaymentMethod = ["cash", "card", "gcash", "paymaya", "bank_transfer", "online"].includes(String(paymentMethod))
+  const normalizedPaymentMethod = ["cash", "card", "gcash", "paymaya", "bank_transfer", "online", "cod"].includes(String(paymentMethod))
     ? String(paymentMethod)
     : "cash";
+  const isCodOrder = String(paymentMethod).toLowerCase() === "cod";
 
   let connection;
   try {
@@ -2224,6 +2347,13 @@ export const handleCreateCustomerOrderMySQL: RequestHandler = async (req, res) =
         Math.max(0, Number((subtotal - grandTotal).toFixed(2))),
       ]
     );
+
+    if (isCodOrder) {
+      await connection.query(
+        `UPDATE sales SET is_cod_pending = TRUE WHERE id = ?`,
+        [saleId]
+      );
+    }
 
     for (const item of preparedItems) {
       await connection.query(

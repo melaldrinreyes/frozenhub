@@ -478,7 +478,7 @@ class ApiClient {
   }
 
   // Sales
-  async getSales(branchId?: string, startDate?: string, endDate?: string, page?: number, limit?: number, status?: string) {
+  async getSales(branchId?: string, startDate?: string, endDate?: string, page?: number, limit?: number, status?: string, excludeUnverifiedCod?: boolean) {
     const params = new URLSearchParams();
     if (branchId) params.append("branchId", branchId);
     if (startDate) params.append("startDate", startDate);
@@ -486,6 +486,7 @@ class ApiClient {
     if (page) params.append("page", page.toString());
     if (limit) params.append("limit", limit.toString());
     if (status) params.append("status", status);
+    if (excludeUnverifiedCod) params.append("excludeUnverifiedCod", "true");
     const query = params.toString() ? `?${params.toString()}` : "";
     return this.request<{ sales: any[]; pagination: any }>(`/sales${query}`);
   }

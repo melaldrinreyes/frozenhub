@@ -147,6 +147,16 @@ import {
   handleDeleteConversation,
 } from "./routes/messages";
 import {
+  handleGetRiderCODCollections,
+  handleMarkCODCollected,
+  handleCreateRemittance,
+  handleGetBranchRemittances,
+  handleGetRemittanceDetails,
+  handleAcknowledgeRemittance,
+  handleVerifyRemittance,
+  handleGetRiderRemittanceHistory,
+} from "./routes/remittances";
+import {
   handleLoginMySQL,
   handleSignupMySQL,
   handleForgotPasswordMySQL,
@@ -510,6 +520,16 @@ export function createServer() {
   app.post("/api/customer/order", apiRateLimiter, runtimeDataProvider === "supabase" ? handleCreateCustomerOrderMySQL : handleCreateCustomerOrder);
   app.get("/api/customer/orders", apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetCustomerOrdersMySQL : handleGetCustomerOrders);
   app.post("/api/customer/orders/:orderId/cancel", apiRateLimiter, runtimeDataProvider === "supabase" ? handleCancelCustomerOrderMySQL : handleCancelCustomerOrder);
+
+  // COD Remittance routes
+  app.get("/api/rider/cod-collections", requireAuth, requireRole("rider"), apiRateLimiter, handleGetRiderCODCollections);
+  app.post("/api/rider/cod-collections/:collectionId/collect", requireAuth, requireRole("rider"), apiRateLimiter, handleMarkCODCollected);
+  app.post("/api/rider/remittances", requireAuth, requireRole("rider"), apiRateLimiter, handleCreateRemittance);
+  app.get("/api/rider/remittances", requireAuth, requireRole("rider"), apiRateLimiter, handleGetRiderRemittanceHistory);
+  app.get("/api/remittances/:id", requireAuth, requireRole("rider", "branch_admin", "admin"), apiRateLimiter, handleGetRemittanceDetails);
+  app.get("/api/branch/remittances", requireAuth, requireRole("branch_admin", "admin"), apiRateLimiter, handleGetBranchRemittances);
+  app.post("/api/remittances/:remittanceId/acknowledge", requireAuth, requireRole("branch_admin", "admin"), apiRateLimiter, handleAcknowledgeRemittance);
+  app.post("/api/remittances/:remittanceId/verify", requireAuth, requireRole("branch_admin", "admin"), apiRateLimiter, handleVerifyRemittance);
 
   // Pricing routes
   app.get("/api/pricing", requireAuth, requireRole("admin"), apiRateLimiter, runtimeDataProvider === "supabase" ? handleGetPricingMySQL : handleGetPricing);

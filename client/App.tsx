@@ -43,6 +43,9 @@ import AdminManageBranches from "./pages/AdminManageBranches";
 import BranchMessages from "./pages/BranchMessages";
 import AdminMessages from "./pages/AdminMessages";
 import AdminSales from "./pages/AdminSales";
+import RiderCODDashboard from "./pages/RiderCODDashboard";
+import BranchRemittancePanel from "./pages/BranchRemittancePanel";
+import RiderRemittanceHistory from "./pages/RiderRemittanceHistory";
 
 const QueryClientCtor = (ReactQuery as any).QueryClient;
 const queryClient = new QueryClientCtor();
@@ -242,6 +245,14 @@ const App = () => (
               }
             />
             <Route
+              path="/branch/remittances"
+              element={
+                <ProtectedRoute allowedRoles={["branch_admin", "admin"]}>
+                  <BranchRemittancePanel />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/pos"
               element={
                 <ProtectedRoute allowedRoles={["admin", "branch_admin", "pos_operator"]}>
@@ -294,6 +305,22 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={["rider"]}>
                   <RiderProfile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/rider/cod-collections"
+              element={
+                <ProtectedRoute allowedRoles={["rider"]}>
+                  <RiderCODDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/rider/remittances"
+              element={
+                <ProtectedRoute allowedRoles={["rider"]}>
+                  <RiderRemittanceHistory />
                 </ProtectedRoute>
               }
             />

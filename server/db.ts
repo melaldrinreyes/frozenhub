@@ -471,7 +471,7 @@ async function ensureSchema(connection: PgConnection) {
       branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE RESTRICT,
       total_amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
       items_count INTEGER NOT NULL DEFAULT 0,
-      payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'card', 'gcash', 'paymaya', 'bank_transfer', 'online')),
+      payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'card', 'gcash', 'paymaya', 'bank_transfer', 'online', 'cod')),
       status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'preparing', 'ready', 'picked_up', 'out_for_delivery', 'completed', 'cancelled')),
       created_by TEXT NULL REFERENCES users(id) ON DELETE SET NULL,
       assigned_rider_id TEXT NULL REFERENCES users(id) ON DELETE SET NULL,
@@ -669,6 +669,43 @@ async function ensureSchema(connection: PgConnection) {
       deleted_for JSONB DEFAULT '[]'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+    `CREATE TABLE IF NOT EXISTS cod_collections (
+      id TEXT PRIMARY KEY,
+      sale_id TEXT UNIQUE NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+      rider_id TEXT NULL REFERENCES users(id) ON DELETE SET NULL,
+      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE RESTRICT,
+      customer_name TEXT NOT NULL,
+      customer_phone TEXT NOT NULL,
+      amount NUMERIC(10, 2) NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'collected', 'remitted', 'cancelled')),
+      collected_at TIMESTAMPTZ NULL,
+      collected_notes TEXT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS remittances (
+      id TEXT PRIMARY KEY,
+      rider_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE RESTRICT,
+      total_amount NUMERIC(10, 2) NOT NULL,
+      collection_count INTEGER NOT NULL DEFAULT 0,
+      notes TEXT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'acknowledged', 'verified')),
+      acknowledged_at TIMESTAMPTZ NULL,
+      acknowledged_by_user_id TEXT NULL REFERENCES users(id) ON DELETE SET NULL,
+      verified_at TIMESTAMPTZ NULL,
+      verified_by_user_id TEXT NULL REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS remittance_items (
+      id TEXT PRIMARY KEY,
+      remittance_id TEXT NOT NULL REFERENCES remittances(id) ON DELETE CASCADE,
+      cod_collection_id TEXT NOT NULL REFERENCES cod_collections(id) ON DELETE RESTRICT,
+      sale_id TEXT NOT NULL REFERENCES sales(id) ON DELETE RESTRICT,
+      amount NUMERIC(10, 2) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
   ]);
 
   await executeStatements(connection, [
@@ -738,6 +775,75 @@ async function ensureSchema(connection: PgConnection) {
     `CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id)`,
     `CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC)`,
     `CREATE INDEX IF NOT EXISTS idx_messages_is_read ON messages(is_read)`,
+    `CREATE INDEX IF NOT EXISTS idx_cod_collections_rider ON cod_collections(rider_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_cod_collections_branch ON cod_collections(branch_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_cod_collections_status ON cod_collections(status)`,
+    `CREATE INDEX IF NOT EXISTS idx_cod_collections_created_at ON cod_collections(created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_remittances_rider ON remittances(rider_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_remittances_branch ON remittances(branch_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_remittances_status ON remittances(status)`,
+    `CREATE INDEX IF NOT EXISTS idx_remittances_created_at ON remittances(created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_remittance_items_remittance ON remittance_items(remittance_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_remittance_items_collection ON remittance_items(cod_collection_id)`,
+  ]);
+
+  await executeStatements(connection, [
+    `ALTER TABLE sales DROP CONSTRAINT IF EXISTS sales_payment_method_check`,
+    `ALTER TABLE sales ADD CONSTRAINT sales_payment_method_check CHECK (payment_method IN ('cash', 'card', 'gcash', 'paymaya', 'bank_transfer', 'online', 'cod'))`,
+  ]);
+
+  // Add missing columns to sales table for COD support
+  await executeStatements(connection, [
+    `ALTER TABLE sales ADD COLUMN IF NOT EXISTS is_cod_pending BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE sales ADD COLUMN IF NOT EXISTS cod_collection_id TEXT NULL`,
+  ]);
+
+  await connection.query(`
+    INSERT INTO cod_collections (
+      id,
+      sale_id,
+      rider_id,
+      branch_id,
+      customer_name,
+      customer_phone,
+      amount,
+      status,
+      created_at,
+      collected_at,
+      collected_notes,
+      updated_at
+    )
+    SELECT
+      CONCAT('codc-', s.id) AS id,
+      s.id AS sale_id,
+      s.assigned_rider_id AS rider_id,
+      s.branch_id,
+      COALESCE(NULLIF(s.customer_info::jsonb ->> 'name', ''), 'Customer') AS customer_name,
+      COALESCE(NULLIF(s.customer_info::jsonb ->> 'phone', ''), 'N/A') AS customer_phone,
+      COALESCE(s.total_amount, 0) AS amount,
+      'pending' AS status,
+      COALESCE(s.delivered_at, s.date, NOW()) AS created_at,
+      NULL AS collected_at,
+      NULL AS collected_notes,
+      NOW() AS updated_at
+    FROM sales s
+    WHERE s.payment_method = 'cod'
+      AND s.status = 'completed'
+      AND s.assigned_rider_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM cod_collections cc
+        WHERE cc.sale_id = s.id
+      )
+  `);
+
+  await executeStatements(connection, [
+    `UPDATE sales
+     SET is_cod_pending = TRUE,
+         cod_collection_id = CONCAT('codc-', id)
+     WHERE payment_method = 'cod'
+       AND status = 'completed'
+       AND assigned_rider_id IS NOT NULL`,
   ]);
 }
 
@@ -1028,7 +1134,7 @@ export async function initializeDatabase() {
         branch_id VARCHAR(255) NOT NULL,
         total_amount DECIMAL(10, 2) NOT NULL,
         items_count INT NOT NULL,
-        payment_method ENUM('cash', 'card', 'gcash', 'paymaya', 'bank_transfer', 'online') NOT NULL,
+        payment_method ENUM('cash', 'card', 'gcash', 'paymaya', 'bank_transfer', 'online', 'cod') NOT NULL,
         status ENUM('pending', 'preparing', 'ready', 'picked_up', 'out_for_delivery', 'completed', 'cancelled') NOT NULL DEFAULT 'pending',
         created_by VARCHAR(255) NULL,
         assigned_rider_id VARCHAR(255) NULL,
@@ -1564,6 +1670,160 @@ async function runMigrations(connection: mysql.PoolConnection) {
       console.log("  ✅ Delivery history table updated");
     } catch (error: any) {
       console.error("  ⚠️  Delivery history migration error:", error.message);
+    }
+
+    // Migration 7: COD Collections table
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS cod_collections (
+          id VARCHAR(255) PRIMARY KEY,
+          sale_id VARCHAR(255) NOT NULL UNIQUE,
+          rider_id VARCHAR(255),
+          branch_id VARCHAR(255) NOT NULL,
+          customer_name VARCHAR(255),
+          customer_phone VARCHAR(20),
+          amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
+          status ENUM('pending', 'collected', 'remitted', 'cancelled') DEFAULT 'pending',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          collected_at DATETIME NULL,
+          collected_notes TEXT NULL,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          
+          FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
+          FOREIGN KEY (rider_id) REFERENCES users(id) ON DELETE SET NULL,
+          FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE RESTRICT,
+          
+          KEY idx_rider_id (rider_id),
+          KEY idx_branch_id (branch_id),
+          KEY idx_status (status),
+          KEY idx_rider_status (rider_id, status),
+          KEY idx_branch_status (branch_id, status),
+          KEY idx_created_at (created_at DESC)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+
+      // Add COD columns to sales if they don't exist
+      const [codPendingColumns] = await connection.query(`SHOW COLUMNS FROM sales LIKE 'is_cod_pending'`);
+      if ((codPendingColumns as any[]).length === 0) {
+        await connection.query(`
+          ALTER TABLE sales
+          ADD COLUMN is_cod_pending BOOLEAN DEFAULT FALSE AFTER payment_status
+        `);
+      }
+
+      const [codCollectionColumns] = await connection.query(`SHOW COLUMNS FROM sales LIKE 'cod_collection_id'`);
+      if ((codCollectionColumns as any[]).length === 0) {
+        await connection.query(`
+          ALTER TABLE sales
+          ADD COLUMN cod_collection_id VARCHAR(255) NULL AFTER is_cod_pending
+        `);
+      }
+
+      await connection.query(`
+        INSERT INTO cod_collections (
+          id,
+          sale_id,
+          rider_id,
+          branch_id,
+          customer_name,
+          customer_phone,
+          amount,
+          status,
+          created_at
+        )
+        SELECT
+          CONCAT('codc-', s.id) AS id,
+          s.id AS sale_id,
+          s.assigned_rider_id,
+          s.branch_id,
+          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(s.customer_info, '$.name')), 'Customer'),
+          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(s.customer_info, '$.phone')), 'N/A'),
+          COALESCE(s.total_amount, 0),
+          'pending',
+          COALESCE(s.delivered_at, s.date, NOW())
+        FROM sales s
+        WHERE s.payment_method = 'cod'
+          AND s.status = 'completed'
+          AND s.assigned_rider_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM cod_collections cc WHERE cc.sale_id = s.id
+          )
+      `);
+
+      await connection.query(`
+        UPDATE sales
+        SET is_cod_pending = TRUE,
+            cod_collection_id = CONCAT('codc-', id)
+        WHERE payment_method = 'cod'
+          AND status = 'completed'
+          AND assigned_rider_id IS NOT NULL
+      `);
+
+      console.log("  ✅ COD Collections table created");
+    } catch (error: any) {
+      console.error("  ⚠️  COD Collections table migration error:", error.message);
+    }
+
+    // Migration 8: Remittances table
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS remittances (
+          id VARCHAR(255) PRIMARY KEY,
+          rider_id VARCHAR(255) NOT NULL,
+          branch_id VARCHAR(255) NOT NULL,
+          total_amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
+          collection_count INT DEFAULT 0,
+          notes TEXT,
+          status ENUM('pending', 'acknowledged', 'verified') DEFAULT 'pending',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          acknowledged_at DATETIME NULL,
+          acknowledged_by_user_id VARCHAR(255) NULL,
+          verified_at DATETIME NULL,
+          verified_by_user_id VARCHAR(255) NULL,
+          
+          FOREIGN KEY (rider_id) REFERENCES users(id) ON DELETE RESTRICT,
+          FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE RESTRICT,
+          FOREIGN KEY (acknowledged_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+          FOREIGN KEY (verified_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+          
+          KEY idx_rider_id (rider_id),
+          KEY idx_branch_id (branch_id),
+          KEY idx_status (status),
+          KEY idx_created_at (created_at DESC),
+          KEY idx_rider_status (rider_id, status),
+          KEY idx_branch_status (branch_id, status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+
+      console.log("  ✅ Remittances table created");
+    } catch (error: any) {
+      console.error("  ⚠️  Remittances table migration error:", error.message);
+    }
+
+    // Migration 9: Remittance Items table
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS remittance_items (
+          id VARCHAR(255) PRIMARY KEY,
+          remittance_id VARCHAR(255) NOT NULL,
+          cod_collection_id VARCHAR(255),
+          sale_id VARCHAR(255),
+          amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          
+          FOREIGN KEY (remittance_id) REFERENCES remittances(id) ON DELETE CASCADE,
+          FOREIGN KEY (cod_collection_id) REFERENCES cod_collections(id) ON DELETE SET NULL,
+          FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE SET NULL,
+          
+          KEY idx_remittance_id (remittance_id),
+          KEY idx_collection_id (cod_collection_id),
+          KEY idx_created_at (created_at DESC)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+
+      console.log("  ✅ Remittance Items table created");
+    } catch (error: any) {
+      console.error("  ⚠️  Remittance Items table migration error:", error.message);
     }
 
     console.log("✅ Database migrations completed");

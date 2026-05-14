@@ -1293,20 +1293,43 @@ export default function POSPage() {
             </CardHeader>
             <CardContent className="space-y-5 pt-5 sm:pt-6">
               <div className="bg-gradient-to-r from-gold-500/10 to-gold-600/10 p-4 rounded-xl border-2 border-gold-500/30">
-                <p className="text-xs sm:text-sm text-slate-600 mb-1">Total Amount</p>
-                <p className="text-2xl sm:text-3xl font-bold text-gold-600">
-                  ₱{total.toFixed(2)}
-                </p>
-                {totalDiscount > 0 && (
-                  <div className="mt-2 pt-2 border-t border-gold-500/30">
-                    <p className="text-xs text-green-600 font-medium">
-                      Discount Applied: -₱{totalDiscount.toFixed(2)}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      Original: ₱{subtotal.toFixed(2)}
-                    </p>
+                <p className="text-xs sm:text-sm text-slate-600 mb-2">Items in Cart</p>
+                <div className="max-h-40 overflow-y-auto pr-2">
+                  {cart.map((item) => {
+                    const lineTotal = item.price * item.quantity - (item.discountAmount || 0);
+                    return (
+                      <div key={item.id} className="flex items-center justify-between gap-3 mb-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-900 truncate">{item.name}</p>
+                          <p className="text-[11px] text-slate-500">
+                            {item.quantity} × ₱{item.price.toFixed(2)}
+                            {item.discountAmount > 0 && (
+                              <span className="text-[11px] text-green-600 ml-2">-₱{(item.discountAmount).toFixed(2)}</span>
+                            )}
+                          </p>
+                        </div>
+                        <div className="text-sm font-bold text-slate-900">₱{lineTotal.toFixed(2)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-gold-500/30">
+                  <div className="flex justify-between items-center text-sm text-slate-600">
+                    <span>Subtotal</span>
+                    <span className="font-medium">₱{subtotal.toFixed(2)}</span>
                   </div>
-                )}
+                  {totalDiscount > 0 && (
+                    <div className="flex justify-between items-center text-sm text-green-600 mt-1">
+                      <span>Discounts</span>
+                      <span className="font-medium">-₱{totalDiscount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="mt-3">
+                    <p className="text-xs text-slate-600 mb-1">Total Amount</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-gold-600">₱{total.toFixed(2)}</p>
+                  </div>
+                </div>
               </div>
 
               {/* Scan-to-Pay Barcode Input removed as requested */}

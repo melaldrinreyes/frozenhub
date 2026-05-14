@@ -94,6 +94,7 @@ export default function CustomerCart() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [notes, setNotes] = useState("");
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   // Fetch branches
   const { data: branchesData } = useQuery({
@@ -226,6 +227,61 @@ export default function CustomerCart() {
     }
     setShowCheckoutDialog(true);
   };
+
+  const validateCheckoutFields = (): boolean => {
+    if (!selectedBranch) {
+      toast({ title: "Branch required", description: "Please select a pickup branch", variant: "destructive" });
+      return false;
+    }
+
+    if (!customerName.trim()) {
+      toast({ title: "Name required", description: "Please enter your name", variant: "destructive" });
+      return false;
+    }
+
+    if (!customerPhone.trim()) {
+      toast({ title: "Phone required", description: "Please enter your contact number", variant: "destructive" });
+      return false;
+    }
+
+    if (cart.length === 0) {
+      toast({ title: "Cart is empty", description: "Please add items to your cart before checkout", variant: "destructive" });
+      return false;
+    }
+
+    return true;
+  };
+
+  const openConfirm = () => {
+    if (!validateCheckoutFields()) return;
+    setShowConfirmDialog(true);
+  };
+
+  // Auto-fill customer details from authenticated user when opening checkout
+  useEffect(() => {
+    if (!showCheckoutDialog) return;
+    if (!user) return;
+
+    // Only set values if fields are currently empty to avoid overwriting manual edits
+    if (!customerName && (user.name || user.full_name)) {
+      setCustomerName(user.name || (user as any).full_name || "");
+    }
+
+    if (!customerPhone && (user.phone || (user as any).contact_number)) {
+      setCustomerPhone(user.phone || (user as any).contact_number || "");
+    }
+
+    // Some user profiles may include an address field
+    if (!customerAddress && ((user as any).address || (user as any).shipping_address)) {
+      setCustomerAddress((user as any).address || (user as any).shipping_address || "");
+    }
+
+    // If user's preferred branch is set, pre-select it when branch not already chosen
+    const preferredBranchId = user.branch_id || (user as any).preferred_branch_id || branches[0]?.id;
+    if (!selectedBranch && preferredBranchId) {
+      setSelectedBranch(String(preferredBranchId));
+    }
+  }, [showCheckoutDialog, user, branches, selectedBranch, customerName, customerPhone, customerAddress]);
 
   const handleCompleteCheckout = () => {
     // Validation
@@ -696,7 +752,7 @@ export default function CustomerCart() {
               Cancel
             </Button>
             <Button
-              onClick={handleCompleteCheckout}
+              onClick={openConfirm}
               disabled={createSaleMutation.isPending}
               className="bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-600 hover:to-gold-700 text-black font-bold"
             >
@@ -707,6 +763,66 @@ export default function CustomerCart() {
                 </>
               ) : (
                 <>Place Order</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Order Confirmation Dialog */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Your Order</DialogTitle>
+            <DialogDescription>Review items and totals before placing the order.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="max-h-56 overflow-y-auto pr-2 space-y-3">
+              {cart.map((item) => {
+                const price = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
+                const itemDiscount = item.promo ? getDiscountAmount(price, item.promo, cartSubtotal) * item.quantity : 0;
+                const lineTotal = price * item.quantity - itemDiscount;
+                return (
+                  <div key={item.id} className="flex items-start justify-between">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-900 truncate">{item.name}</p>
+                      <p className="text-xs text-slate-500">{item.quantity} × ₱{price.toFixed(2)} {itemDiscount > 0 && (<span className="text-xs text-green-600"> -₱{itemDiscount.toFixed(2)}</span>)}</p>
+                    </div>
+                    <div className="text-sm font-bold">₱{lineTotal.toFixed(2)}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="border-t pt-3 space-y-2">
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>Subtotal</span>
+                <span>₱{cartSubtotal.toFixed(2)}</span>
+              </div>
+              {cartDiscount > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>Discounts</span>
+                  <span>-₱{cartDiscount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-lg font-bold">
+                <span>Total</span>
+                <span className="text-gold-600">₱{cartTotal.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfirmDialog(false)} disabled={createSaleMutation.isPending}>Back</Button>
+            <Button onClick={() => { setShowConfirmDialog(false); handleCompleteCheckout(); }} className="bg-gradient-to-r from-gold-500 to-gold-600 text-black font-bold" disabled={createSaleMutation.isPending}>
+              {createSaleMutation.isPending ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-black border-t-transparent rounded-full mr-2" />
+                  Processing...
+                </>
+              ) : (
+                <>Confirm & Place Order</>
               )}
             </Button>
           </DialogFooter>

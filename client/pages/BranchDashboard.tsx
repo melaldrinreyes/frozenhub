@@ -38,6 +38,20 @@ import { apiClient } from "@/lib/apiClient";
 import { useAuth } from "@/lib/authContext";
 import POSPage from "@/pages/POSPage";
 
+const JWT_TOKEN_KEY = "frozenhub_jwt_token";
+
+function withAuth(init: RequestInit = {}): RequestInit {
+  const token = typeof window !== "undefined" ? localStorage.getItem(JWT_TOKEN_KEY) : null;
+  return {
+    ...init,
+    headers: {
+      ...(init.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    credentials: "include",
+  };
+}
+
 type TrendRange = "all" | "7d" | "30d" | "90d" | "1y" | "custom";
 
 function formatDateLocal(value: Date) {
@@ -200,6 +214,25 @@ export default function BranchDashboard() {
     item.quantity <= (item.reorder_level || 10)
   ).length || 0;
 
+  // Fetch COD remittances for this branch
+  const { data: remittancesData, isLoading: isLoadingRemittances } = useQuery({
+    queryKey: ["branch-remittances", user?.branch_id],
+    queryFn: async () => {
+      const response = await fetch("/api/branch/remittances", withAuth());
+      if (!response.ok) throw new Error("Failed to fetch branch remittances");
+      return response.json();
+    },
+    enabled: !!user?.branch_id && (user?.role === "branch_admin" || user?.role === "admin"),
+    refetchInterval: 30000,
+  });
+
+  const branchRemittances = remittancesData?.remittances || [];
+  const pendingRemittances = branchRemittances.filter((remittance: any) => remittance.status === "pending");
+  const acknowledgedRemittances = branchRemittances.filter((remittance: any) => remittance.status === "acknowledged");
+  const verifiedRemittances = branchRemittances.filter((remittance: any) => remittance.status === "verified");
+  const pendingRemittanceAmount = pendingRemittances.reduce((sum: number, remittance: any) => sum + Number(remittance.total_amount || 0), 0);
+  const recentBranchRemittances = branchRemittances.slice(0, 3);
+
   // Fetch recent sales/orders for this branch (same approach as Sales Report)
   const { data: recentSalesData, isLoading: isLoadingRecentSales } = useQuery({
     queryKey: ["recent-sales", user?.branch_id],
@@ -215,7 +248,7 @@ export default function BranchDashboard() {
         status: 'all',
       });
 
-      const result = await apiClient.getSales(user.branch_id, undefined, undefined, 1, 10, "all");
+      const result = await apiClient.getSales(user.branch_id, undefined, undefined, 1, 10, "all", true);
 
       // Normalize sale_date into a parsed Date on the client for consistent rendering
       if (result.sales && Array.isArray(result.sales)) {
@@ -643,8 +676,99 @@ export default function BranchDashboard() {
               </CardContent>
             </Card>
               </Link>
+
+          <Link to="/branch/remittances">
+            <Card className="hover:shadow-md transition-all cursor-pointer h-full bg-white border-2 border-slate-300 hover:border-purple-600">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-purple-100 rounded-lg">
+                    <DollarSign className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-900">COD Remittances</p>
+                    <p className="text-xs text-slate-600">Manage rider remittances</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
             </div>
           </div>
+
+          {/* COD Remittance Overview */}
+          <Card className="bg-white shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between gap-3">
+              <div>
+                <CardTitle>COD Remittances</CardTitle>
+                <p className="text-sm text-slate-500 mt-1">Rider remittances for this branch</p>
+              </div>
+              <Link to="/branch/remittances" className="text-sm font-semibold text-purple-600 hover:text-purple-700">
+                View all
+              </Link>
+            </CardHeader>
+            <CardContent>
+              {isLoadingRemittances ? (
+                <div className="text-sm text-slate-500 py-4">Loading remittances...</div>
+              ) : branchRemittances.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+                  No rider remittances for this branch yet.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4">
+                      <p className="text-xs font-medium text-yellow-700">Pending</p>
+                      <p className="text-2xl font-bold text-yellow-900 mt-1">{pendingRemittances.length}</p>
+                      <p className="text-xs text-yellow-700 mt-1">₱{pendingRemittanceAmount.toFixed(2)}</p>
+                    </div>
+                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                      <p className="text-xs font-medium text-blue-700">Acknowledged</p>
+                      <p className="text-2xl font-bold text-blue-900 mt-1">{acknowledgedRemittances.length}</p>
+                      <p className="text-xs text-blue-700 mt-1">Awaiting verification</p>
+                    </div>
+                    <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+                      <p className="text-xs font-medium text-green-700">Verified</p>
+                      <p className="text-2xl font-bold text-green-900 mt-1">{verifiedRemittances.length}</p>
+                      <p className="text-xs text-green-700 mt-1">Released to branch sales</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-slate-900">Recent remittances</h3>
+                      <span className="text-xs text-slate-500">Latest 3 records</span>
+                    </div>
+                    <div className="space-y-2">
+                      {recentBranchRemittances.map((remittance: any) => (
+                        <div key={remittance.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-slate-200 px-4 py-3">
+                          <div>
+                            <p className="font-semibold text-slate-900">{remittance.rider_name || "Rider"}</p>
+                            <p className="text-xs text-slate-500">
+                              {new Date(remittance.created_at).toLocaleString()} • {remittance.collection_count} collections
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                remittance.status === "verified"
+                                  ? "bg-green-100 text-green-800"
+                                  : remittance.status === "acknowledged"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-yellow-100 text-yellow-800"
+                              }`}
+                            >
+                              {String(remittance.status || "pending").toUpperCase()}
+                            </span>
+                            <span className="font-bold text-slate-900">₱{Number(remittance.total_amount || 0).toFixed(2)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Recent Orders */}
           <Card className="bg-white shadow-sm">
