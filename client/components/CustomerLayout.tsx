@@ -307,7 +307,7 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
 
       {/* Bottom Navigation - Mobile Only */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 px-3 pb-3">
-        <div className="grid grid-cols-4 h-16 rounded-2xl border border-gold-500/20 bg-black/92 backdrop-blur-xl shadow-[0_-12px_30px_rgba(0,0,0,0.35)] overflow-hidden">
+        <div className="grid grid-cols-5 h-16 rounded-2xl border border-gold-500/20 bg-black/92 backdrop-blur-xl shadow-[0_-12px_30px_rgba(0,0,0,0.35)] overflow-hidden">
 
           <button
             onClick={() => navigate("/customer/shop")}
@@ -395,6 +395,51 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
             </div>
             <span className="text-xs font-medium">Messages</span>
           </button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={`flex flex-col items-center justify-center gap-1 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-400/70 ${
+                  isActive("/customer/profile")
+                    ? "text-gold-300 bg-gold-500/15"
+                    : "text-gray-400 hover:text-gold-300 hover:bg-white/5"
+                }`}
+              >
+                <div className="relative">
+                  <User className="w-5 h-5" />
+                </div>
+                <span className="text-xs font-medium">{user ? "Account" : "Login"}</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={10} className="mb-2 w-44 rounded-xl border border-white/10 bg-black/95 p-2 text-white shadow-2xl backdrop-blur-xl">
+              {user ? (
+                <>
+                  <DropdownMenuItem
+                    onClick={() => navigate("/customer/profile")}
+                    className="cursor-pointer rounded-lg px-3 py-2 text-sm text-gray-100 focus:bg-white/10 focus:text-white"
+                  >
+                    Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      await handleLogout();
+                    }}
+                    className="cursor-pointer rounded-lg px-3 py-2 text-sm text-red-300 focus:bg-red-500/15 focus:text-red-200"
+                  >
+                    Logout
+                  </DropdownMenuItem>
+                </>
+              ) : (
+                <DropdownMenuItem
+                  onClick={() => setShowLoginModal(true)}
+                  className="cursor-pointer rounded-lg px-3 py-2 text-sm text-gray-100 focus:bg-white/10 focus:text-white"
+                >
+                  Login
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </nav>
 

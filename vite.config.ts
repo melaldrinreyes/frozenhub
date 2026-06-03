@@ -9,8 +9,10 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const parsedDevPort = Number(env.VITE_DEV_PORT || 5173);
   const devPort = Number.isFinite(parsedDevPort) ? parsedDevPort : 5173;
+  const isProduction = mode === "production";
 
   return {
+    esbuild: isProduction ? { drop: ["console", "debugger"] } : undefined,
     server: {
       host: "::",
       port: devPort,

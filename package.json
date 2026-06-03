@@ -11,8 +11,8 @@
     ]
   },
   "scripts": {
-    "dev": "vite",
-    "dev:host": "node ./scripts/ensure-port.js && vite",
+    "dev": "node ./scripts/ensure-port.cjs && vite",
+    "dev:host": "node ./scripts/ensure-port.cjs && vite",
     "vercel-build": "pnpm build",
     "build": "npm run build:client && npm run build:server && npm run build:serverless",
     "build:client": "vite build",
